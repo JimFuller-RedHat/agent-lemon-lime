@@ -50,16 +50,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
 
-      - name: Install uv
-        run: pip install uv
-
       - name: Install agent-lemon-lime
-        run: uv pip install agent-lemon-lime
+        run: uv pip install --system agent-lemon-lime
 
       - name: Run agent-lemon discover
         run: agent-lemon discover
@@ -151,11 +148,19 @@ def assert_mode(
         )
         raise typer.Exit(code=1)
 
-    assert_scp = SystemCapabilityProfile.from_yaml(scp_path)
+    try:
+        assert_scp = SystemCapabilityProfile.from_yaml(scp_path)
+    except FileNotFoundError:
+        console.print(f"[red]Error:[/red] SCP file not found: {scp_path}")
+        raise typer.Exit(code=1) from None
 
     with MockSandbox() as sandbox:
         agent = LemonAgent(config=config, sandbox=sandbox)
         result = agent.run_assert(eval_cases=[], assert_scp=assert_scp)
+
+    report_path = config.report.output
+    from agent_lemon_lime.report.synthesizer import ReportSynthesizer
+    ReportSynthesizer().write(result.report, path=report_path)
 
     s = result.report.summary
     _print_summary_table(s.total, s.passed, s.failed)
@@ -194,7 +199,10 @@ def action(
     ] = ".github/workflows/agent-lemon.yml",
 ) -> None:
     """Generate a GitHub Actions workflow file for agent-lemon."""
-    out_path = pathlib.Path(output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(_GITHUB_ACTION_TEMPLATE)
-    console.print(f"[green]Created[/green] {out_path}")
+    out = pathlib.Path(output)
+    if out.exists():
+        console.print(f"[yellow]Warning:[/yellow] {out} already exists — skipping.")
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(_GITHUB_ACTION_TEMPLATE)
+    console.print(f"[green]Generated GitHub Action:[/green] {out}")

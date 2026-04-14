@@ -68,6 +68,7 @@ class SystemCapabilityProfile(BaseModel):
         Args:
             path: Destination file path (str or Path).
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(
             yaml.dump(self.model_dump(), default_flow_style=False, sort_keys=False)
         )
