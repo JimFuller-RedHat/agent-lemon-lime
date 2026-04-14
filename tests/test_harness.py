@@ -28,6 +28,12 @@ def test_parse_capabilities_extracts_network_host() -> None:
     assert any("api.github.com" in c for c in caps)
 
 
+def test_parse_capabilities_extracts_filesystem_path() -> None:
+    stderr = "write: path=/tmp/out.txt"
+    caps = _parse_capabilities("", stderr)
+    assert any("/tmp/out.txt" in c for c in caps)
+
+
 @patch("argus.core.harness.subprocess.run")
 def test_harness_run_discovery(mock_run: MagicMock, tmp_path: Path) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
@@ -41,11 +47,27 @@ def test_harness_run_discovery(mock_run: MagicMock, tmp_path: Path) -> None:
 
 
 @patch("argus.core.harness.subprocess.run")
-def test_harness_run_with_policy(
+def test_harness_run_with_policy_uses_supplied_policy(
     mock_run: MagicMock, tmp_path: Path, tmp_policy_yaml: Path
 ) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
     scp = SystemCapabilityProfile.from_yaml(tmp_policy_yaml)
-    harness = OpenShellHarness(policy=scp)
-    result = harness.run(["python", "-m", "myagent"], work_dir=tmp_path)
+
+    written_yamls: list[str] = []
+
+    original_to_yaml = SystemCapabilityProfile.to_yaml
+
+    def capture_to_yaml(self: SystemCapabilityProfile, path: object) -> None:
+        import yaml as _yaml
+        written_yamls.append(_yaml.dump(self.model_dump()))
+        original_to_yaml(self, path)
+
+    with patch.object(SystemCapabilityProfile, "to_yaml", capture_to_yaml):
+        harness = OpenShellHarness(policy=scp)
+        result = harness.run(["python", "-m", "myagent"], work_dir=tmp_path)
+
     assert result.success is True
+    # The written YAML must contain the policy's network_policies (empty dict for minimal SCP)
+    # and must NOT contain the permissive policy's audit sentinel
+    assert written_yamls, "to_yaml was never called"
+    assert "all_audit" not in written_yamls[0]  # permissive() sentinel absent
