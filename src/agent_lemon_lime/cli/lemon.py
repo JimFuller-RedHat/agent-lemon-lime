@@ -83,11 +83,11 @@ def _print_summary_table(total: int, passed: int, failed: int) -> None:
 @app.command()
 def discover(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Project root")] = ".",
-    scp_output: Annotated[
-        str | None, typer.Option("--scp-output", help="Override SCP output path")
+    scp: Annotated[
+        str | None, typer.Option("--scp", help="Override SCP output path")
     ] = None,
-    report_output: Annotated[
-        str | None, typer.Option("--report-output", help="Override report output path")
+    report: Annotated[
+        str | None, typer.Option("--report", help="Override report output path")
     ] = None,
 ) -> None:
     """Discover capabilities: run evals and generate SCP profile + report."""
@@ -107,14 +107,14 @@ def discover(
         agent = LemonAgent(config=config, sandbox=sandbox)
         result = agent.run_discovery(eval_cases=[])
 
-    scp_path = scp_output or config.scp.output
+    scp_path = scp or config.scp.output
     result.scp.to_yaml(scp_path)
     console.print(f"SCP written to [green]{scp_path}[/green]")
 
     from agent_lemon_lime.report.synthesizer import ReportSynthesizer
 
     synthesizer = ReportSynthesizer()
-    report_path = report_output or config.report.output
+    report_path = report or config.report.output
     synthesizer.write(result.report, path=report_path)
     console.print(f"Report written to [green]{report_path}[/green]")
 
@@ -125,8 +125,8 @@ def discover(
 @app.command()
 def assert_mode(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Project root")] = ".",
-    scp_file: Annotated[
-        str | None, typer.Option("--scp-file", help="SCP file to assert against")
+    scp: Annotated[
+        str | None, typer.Option("--scp", help="SCP file to assert against")
     ] = None,
 ) -> None:
     """Assert mode: run evals against a defined SCP and report violations."""
@@ -143,11 +143,11 @@ def assert_mode(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    scp_path = scp_file or config.scp.assert_file
+    scp_path = scp or config.scp.assert_file
     if scp_path is None:
         console.print(
             "[red]Error:[/red] No SCP file specified. "
-            "Use --scp-file or set scp.assert_file in agent-lemon.yaml."
+            "Use --scp or set scp.assert_file in agent-lemon.yaml."
         )
         raise typer.Exit(code=1)
 
