@@ -1,4 +1,5 @@
 """LemonConfig: reads agent-lemon.yaml from the project root."""
+
 from __future__ import annotations
 
 import pathlib

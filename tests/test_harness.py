@@ -1,5 +1,6 @@
 """Tests for sandbox abstraction and MockSandbox."""
 
+import importlib.util
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,6 +8,12 @@ import pytest
 from agent_lemon_lime.harness.base import AbstractSandbox, ExecResult
 from agent_lemon_lime.harness.mock import MockSandbox
 from agent_lemon_lime.harness.openshell import OpenshellSandbox
+
+_openshell_importable = importlib.util.find_spec("openshell") is not None
+try:
+    import openshell as _openshell  # noqa: F401
+except Exception:
+    _openshell_importable = False
 
 
 def test_exec_result_success():
@@ -100,6 +107,10 @@ def test_openshell_sandbox_requires_context():
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not _openshell_importable,
+    reason="openshell library not functional in this environment",
+)
 def test_openshell_real_cluster():
     """Integration: requires a live OpenShell cluster."""
     sandbox = OpenshellSandbox()

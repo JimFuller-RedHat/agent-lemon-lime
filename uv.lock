@@ -15,6 +15,57 @@ wheels = [
 ]
 
 [[package]]
+name = "agent-lemon-lime"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "openshell" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "pydantic-ai" },
+    { name = "pydantic-deep" },
+    { name = "pydantic-evals" },
+    { name = "pydantic-graph" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-mock" },
+    { name = "ruff" },
+    { name = "ty" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "openshell", specifier = ">=0.0.29" },
+    { name = "opentelemetry-api", specifier = ">=1.25.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.25.0" },
+    { name = "pydantic-ai", extras = ["anthropic"], specifier = ">=1.0.0" },
+    { name = "pydantic-deep", specifier = ">=0.3.1" },
+    { name = "pydantic-evals", specifier = ">=1.0.0" },
+    { name = "pydantic-graph", specifier = ">=1.0.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "typer", specifier = ">=0.24.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "pytest-mock", specifier = ">=3.14" },
+    { name = "ruff", specifier = ">=0.9.0" },
+    { name = "ty", specifier = ">=0.0.1a0" },
+]
+
+[[package]]
 name = "aiofile"
 version = "3.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -171,57 +222,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/38/61/0b9ae6399dd4a58d8c1b1dc5a27d6f2808023d0b5dd3104bb99f45a33ff6/argcomplete-3.6.3.tar.gz", hash = "sha256:62e8ed4fd6a45864acc8235409461b72c9a28ee785a2011cc5eb78318786c89c", size = 73754, upload-time = "2025-10-20T03:33:34.741Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/74/f5/9373290775639cb67a2fce7f629a1c240dce9f12fe927bc32b2736e16dfc/argcomplete-3.6.3-py3-none-any.whl", hash = "sha256:f5007b3a600ccac5d25bbce33089211dfd49eab4a7718da3f10e3082525a92ce", size = 43846, upload-time = "2025-10-20T03:33:33.021Z" },
-]
-
-[[package]]
-name = "argus"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "httpx" },
-    { name = "openshell" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-sdk" },
-    { name = "pydantic-ai" },
-    { name = "pydantic-deep" },
-    { name = "pydantic-evals" },
-    { name = "pydantic-graph" },
-    { name = "pyyaml" },
-    { name = "rich" },
-    { name = "typer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-mock" },
-    { name = "ruff" },
-    { name = "ty" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "openshell", specifier = ">=0.0.29" },
-    { name = "opentelemetry-api", specifier = ">=1.25.0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.25.0" },
-    { name = "pydantic-ai", extras = ["anthropic"], specifier = ">=1.0.0" },
-    { name = "pydantic-deep", specifier = ">=0.3.1" },
-    { name = "pydantic-evals", specifier = ">=1.0.0" },
-    { name = "pydantic-graph", specifier = ">=1.0.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "typer", specifier = ">=0.24.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "pytest-mock", specifier = ">=3.14" },
-    { name = "ruff", specifier = ">=0.9.0" },
-    { name = "ty", specifier = ">=0.0.1a0" },
 ]
 
 [[package]]

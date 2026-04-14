@@ -51,11 +51,13 @@ def test_scp_defaults() -> None:
 
 
 def test_scp_with_network_endpoint() -> None:
-    scp = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "anthropic": {"name": "Anthropic API", "endpoints": [{"host": "api.anthropic.com"}]}
+    scp = SystemCapabilityProfile.model_validate(
+        {
+            "network_policies": {
+                "anthropic": {"name": "Anthropic API", "endpoints": [{"host": "api.anthropic.com"}]}
+            }
         }
-    })
+    )
     assert scp.network_policies["anthropic"].endpoints[0].host == "api.anthropic.com"
 
 
@@ -79,16 +81,12 @@ def test_permissive_scp() -> None:
 
 
 def test_scp_merge_unions_network_policies() -> None:
-    a = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "svc_a": {"name": "A", "endpoints": [{"host": "a.example.com"}]}
-        }
-    })
-    b = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "svc_b": {"name": "B", "endpoints": [{"host": "b.example.com"}]}
-        }
-    })
+    a = SystemCapabilityProfile.model_validate(
+        {"network_policies": {"svc_a": {"name": "A", "endpoints": [{"host": "a.example.com"}]}}}
+    )
+    b = SystemCapabilityProfile.model_validate(
+        {"network_policies": {"svc_b": {"name": "B", "endpoints": [{"host": "b.example.com"}]}}}
+    )
     merged = a.merge(b)
     assert "svc_a" in merged.network_policies
     assert "svc_b" in merged.network_policies
@@ -96,32 +94,40 @@ def test_scp_merge_unions_network_policies() -> None:
 
 def test_scp_merge_other_wins_on_conflict() -> None:
     """When both profiles have the same policy key, other's value wins."""
-    a = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "svc": {"name": "A version", "endpoints": [{"host": "a.example.com"}]}
+    a = SystemCapabilityProfile.model_validate(
+        {
+            "network_policies": {
+                "svc": {"name": "A version", "endpoints": [{"host": "a.example.com"}]}
+            }
         }
-    })
-    b = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "svc": {"name": "B version", "endpoints": [{"host": "b.example.com"}]}
+    )
+    b = SystemCapabilityProfile.model_validate(
+        {
+            "network_policies": {
+                "svc": {"name": "B version", "endpoints": [{"host": "b.example.com"}]}
+            }
         }
-    })
+    )
     merged = a.merge(b)
     assert merged.network_policies["svc"].name == "B version"
     assert merged.network_policies["svc"].endpoints[0].host == "b.example.com"
 
 
 def test_scp_assert_subset_of_no_violations() -> None:
-    allowed = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "anthropic": {"name": "Anthropic", "endpoints": [{"host": "api.anthropic.com"}]}
+    allowed = SystemCapabilityProfile.model_validate(
+        {
+            "network_policies": {
+                "anthropic": {"name": "Anthropic", "endpoints": [{"host": "api.anthropic.com"}]}
+            }
         }
-    })
-    observed = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "anthropic": {"name": "Anthropic", "endpoints": [{"host": "api.anthropic.com"}]}
+    )
+    observed = SystemCapabilityProfile.model_validate(
+        {
+            "network_policies": {
+                "anthropic": {"name": "Anthropic", "endpoints": [{"host": "api.anthropic.com"}]}
+            }
         }
-    })
+    )
     violations = observed.assert_subset_of(allowed)
     assert violations == []
 
@@ -129,11 +135,13 @@ def test_scp_assert_subset_of_no_violations() -> None:
 def test_scp_assert_subset_of_detects_violation() -> None:
     allowed = SystemCapabilityProfile()
     # No network policies allowed
-    observed = SystemCapabilityProfile.model_validate({
-        "network_policies": {
-            "external": {"name": "Unexpected", "endpoints": [{"host": "evil.example.com"}]}
+    observed = SystemCapabilityProfile.model_validate(
+        {
+            "network_policies": {
+                "external": {"name": "Unexpected", "endpoints": [{"host": "evil.example.com"}]}
+            }
         }
-    })
+    )
     violations = observed.assert_subset_of(allowed)
     assert len(violations) == 1
     assert "evil.example.com" in violations[0]

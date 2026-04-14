@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+from typing import Any
 
 from agent_lemon_lime.harness.base import ExecResult
 
@@ -16,14 +17,15 @@ class OpenshellSandbox:
         cluster: str | None = None,
         timeout: float = 30.0,
         ready_timeout_seconds: float = 120.0,
-        _client: object | None = None,  # injected in tests
+        _client: Any | None = None,  # injected in tests; openshell type not available statically
     ) -> None:
         self._cluster = cluster
         self._timeout = timeout
         self._ready_timeout = ready_timeout_seconds
-        self._test_client = _client
-        self._session: object | None = None
-        self._client_instance: object | None = None
+        self._test_client: Any | None = _client
+        # openshell types are not available statically; use Any for dynamic dispatch
+        self._session: Any | None = None
+        self._client_instance: Any | None = None
         self._active = False
 
     @property
@@ -40,7 +42,7 @@ class OpenshellSandbox:
                 cluster=self._cluster,
                 timeout=self._timeout,
             )
-        self._session = self._client_instance.create_session()  # type: ignore[union-attr]
+        self._session = self._client_instance.create_session()
         self._active = True
         return self
 
@@ -48,11 +50,11 @@ class OpenshellSandbox:
         try:
             if self._session is not None:
                 with contextlib.suppress(Exception):
-                    self._session.delete()  # type: ignore[union-attr]
+                    self._session.delete()
         finally:
             if self._client_instance is not None and self._test_client is None:
                 with contextlib.suppress(Exception):
-                    self._client_instance.close()  # type: ignore[union-attr]
+                    self._client_instance.close()
             self._session = None
             self._client_instance = None
             self._active = False
@@ -67,7 +69,7 @@ class OpenshellSandbox:
     ) -> ExecResult:
         if not self._active or self._session is None:
             raise RuntimeError("OpenshellSandbox must be used as a context manager")
-        raw = self._session.exec(  # type: ignore[union-attr]
+        raw = self._session.exec(
             command,
             workdir=workdir,
             env=env,

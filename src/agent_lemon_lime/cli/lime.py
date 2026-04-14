@@ -52,9 +52,10 @@ def monitor(
 
     lime = LimeAgent(otel_endpoint=otel, assert_scp=assert_scp, poll_interval_seconds=interval)
 
-    console.print(Panel(
+    header = (
         f"[bold]Agent Lime — Monitor Mode[/bold]\nOTEL: {otel}\nSCP: {scp}\nInterval: {interval}s"
-    ))
+    )
+    console.print(Panel(header))
 
     iteration = 0
     while True:

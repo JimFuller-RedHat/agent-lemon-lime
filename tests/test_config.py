@@ -1,4 +1,5 @@
 """Tests for LemonConfig — agent-lemon.yaml reader."""
+
 import textwrap
 from pathlib import Path
 
@@ -43,7 +44,10 @@ def test_config_loads_full():
     assert config.evals.directories == ["examples/hello_world/evals"]
     assert len(config.evals.skills) == 2
     assert config.evals.skills[0].path == "./skills"
-    assert config.evals.skills[1].git == "https://gitlab.cee.redhat.com/product-security/prodsec-skills"
+    assert (
+        config.evals.skills[1].git
+        == "https://gitlab.cee.redhat.com/product-security/prodsec-skills"
+    )
     assert config.evals.skills[1].branch == "main"
     assert config.scp.output == ".agent-lemon/scp.yaml"
     assert config.scp.assert_file is None

@@ -80,9 +80,7 @@ def _print_summary_table(total: int, passed: int, failed: int) -> None:
 @app.command()
 def discover(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Project root")] = ".",
-    scp: Annotated[
-        str | None, typer.Option("--scp", help="Override SCP output path")
-    ] = None,
+    scp: Annotated[str | None, typer.Option("--scp", help="Override SCP output path")] = None,
     report: Annotated[
         str | None, typer.Option("--report", help="Override report output path")
     ] = None,
@@ -122,9 +120,7 @@ def discover(
 @app.command()
 def assert_mode(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Project root")] = ".",
-    scp: Annotated[
-        str | None, typer.Option("--scp", help="SCP file to assert against")
-    ] = None,
+    scp: Annotated[str | None, typer.Option("--scp", help="SCP file to assert against")] = None,
 ) -> None:
     """Assert mode: run evals against a defined SCP and report violations."""
     from agent_lemon_lime.agents.lemon import LemonAgent
@@ -160,6 +156,7 @@ def assert_mode(
 
     report_path = config.report.output
     from agent_lemon_lime.report.synthesizer import ReportSynthesizer
+
     ReportSynthesizer().write(result.report, path=report_path)
 
     s = result.report.summary
@@ -182,9 +179,7 @@ def init(
     """Generate an agent-lemon.yaml config template."""
     config_file = pathlib.Path(project_dir) / "agent-lemon.yaml"
     if config_file.exists():
-        console.print(
-            f"[yellow]Warning:[/yellow] {config_file} already exists. Skipping."
-        )
+        console.print(f"[yellow]Warning:[/yellow] {config_file} already exists. Skipping.")
         return
 
     config_file.write_text(_CONFIG_TEMPLATE.format(name=name))
