@@ -1,0 +1,50 @@
+[project]
+name = "argus"
+version = "0.1.0"
+description = "Agent Lemon & Agent Lime — AI agent evaluation and runtime monitoring"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic-ai[anthropic]>=1.0.0",
+    "pydantic-evals>=1.0.0",
+    "pydantic-graph>=1.0.0",
+    "pydantic-deep>=0.3.1",
+    "openshell>=0.0.29",
+    "typer>=0.15.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+    "httpx>=0.27.0",
+    "opentelemetry-api>=1.25.0",
+    "opentelemetry-sdk>=1.25.0",
+]
+
+[project.scripts]
+agent-lemon = "argus.cli.lemon:app"
+agent-lime = "argus.cli.lime:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/argus"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-mock>=3.14",
+    "ruff>=0.9.0",
+    "ty>=0.0.1a0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
