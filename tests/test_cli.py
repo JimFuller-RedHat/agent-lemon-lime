@@ -46,3 +46,14 @@ def test_lime_cli_monitor_requires_scp(tmp_path):
     result = runner.invoke(lime_app, ["monitor", "--otel", "http://localhost:4317"])
     assert result.exit_code != 0
     assert "scp" in result.output.lower()
+
+
+def test_lime_cli_monitor_once(tmp_path):
+    scp_file = tmp_path / "scp.yaml"
+    scp_file.write_text("version: 1\n")
+    result = runner.invoke(
+        lime_app,
+        ["monitor", "--otel", "http://localhost:4317", "--scp", str(scp_file), "--once"],
+    )
+    assert result.exit_code == 0
+    assert "Lime Check #1" in result.output

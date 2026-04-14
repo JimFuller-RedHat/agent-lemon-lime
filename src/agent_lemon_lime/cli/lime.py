@@ -10,6 +10,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from agent_lemon_lime.agents.lime import LimeEvent
+
 app = typer.Typer(
     name="agent-lime",
     help="Monitor a running AI agent for SCP compliance and anomalies.",
@@ -35,6 +37,9 @@ def monitor(
     if not scp:
         console.print("[red]Error:[/red] --scp <path-to-scp.yaml> is required.")
         raise typer.Exit(code=1)
+    if not otel:
+        console.print("[red]Error:[/red] --otel <endpoint> is required.")
+        raise typer.Exit(code=1)
 
     from agent_lemon_lime.agents.lime import LimeAgent
     from agent_lemon_lime.scp.models import SystemCapabilityProfile
@@ -59,10 +64,14 @@ def monitor(
         _print_status(iteration, events, anomalies)
         if once:
             break
-        time.sleep(interval)
+        try:
+            time.sleep(interval)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Monitoring stopped.[/yellow]")
+            raise typer.Exit(code=0) from None
 
 
-def _print_status(iteration: int, events: list, anomalies: list[str]) -> None:
+def _print_status(iteration: int, events: list[LimeEvent], anomalies: list[str]) -> None:
     table = Table(title=f"Lime Check #{iteration}")
     table.add_column("Metric")
     table.add_column("Value")
@@ -71,4 +80,4 @@ def _print_status(iteration: int, events: list, anomalies: list[str]) -> None:
     table.add_row("Anomalies", anomaly_val)
     console.print(table)
     for a in anomalies:
-        console.print(f"  \u26a0  {a}")
+        console.print(f"  ⚠  {a}")
