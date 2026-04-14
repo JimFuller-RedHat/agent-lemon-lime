@@ -1,6 +1,8 @@
 """Tests for SystemCapabilityProfile model and YAML I/O."""
 from pathlib import Path
 
+import pytest
+
 from argus.core.scp import SystemCapabilityProfile
 
 
@@ -46,9 +48,17 @@ def test_scp_with_network_policy() -> None:
     assert scp.network_policies["github_api"].endpoints[0].host == "api.github.com"
 
 
-def test_scp_from_yaml(tmp_policy_yaml: Path) -> None:
-    scp = SystemCapabilityProfile.from_yaml(tmp_policy_yaml)
+def test_scp_from_yaml_accepts_string_path(tmp_policy_yaml: Path) -> None:
+    # from_yaml should accept a plain string, not just a Path object
+    scp = SystemCapabilityProfile.from_yaml(str(tmp_policy_yaml))
     assert scp.version == 1
+
+
+def test_scp_from_yaml_rejects_empty_file(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.yaml"
+    empty.write_text("")
+    with pytest.raises(ValueError, match="Expected a YAML mapping"):
+        SystemCapabilityProfile.from_yaml(empty)
 
 
 def test_permissive_scp() -> None:

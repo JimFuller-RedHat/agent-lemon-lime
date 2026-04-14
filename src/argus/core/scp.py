@@ -24,8 +24,8 @@ class ProcessPolicy(BaseModel):
 
 
 class NetworkEndpoint(BaseModel):
-    host: str
-    port: int = 443
+    host: str = Field(..., min_length=1)
+    port: int = Field(443, ge=1, le=65535)
     protocol: Literal["rest", "grpc"] = "rest"
     tls: Literal["terminate", "passthrough"] = "terminate"
     enforcement: Literal["enforce", "audit"] = "enforce"
@@ -48,6 +48,9 @@ class SystemCapabilityProfile(BaseModel):
     @classmethod
     def from_yaml(cls, path: Path | str) -> SystemCapabilityProfile:
         data = yaml.safe_load(Path(path).read_text())
+        if not isinstance(data, dict):
+            msg = f"Expected a YAML mapping in {path!r}, got {type(data).__name__}"
+            raise ValueError(msg)
         return cls.model_validate(data)
 
     def to_yaml(self, path: Path | str) -> None:

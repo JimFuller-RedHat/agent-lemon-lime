@@ -48,5 +48,5 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-[tool.ty.rules]
-strictness = "warn"
+[tool.ty]
+# Configuration for ty type checker — add per-rule overrides here as needed
