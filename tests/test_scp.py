@@ -1,14 +1,7 @@
 """Tests for SystemCapabilityProfile model and YAML I/O."""
 from pathlib import Path
 
-from argus.core.scp import (
-    FilesystemPolicy,  # noqa: F401 — exported for type-checking by callers
-    LandlockPolicy,  # noqa: F401 — exported for type-checking by callers
-    NetworkEndpoint,  # noqa: F401 — exported for type-checking by callers
-    NetworkPolicy,  # noqa: F401 — exported for type-checking by callers
-    ProcessPolicy,  # noqa: F401 — exported for type-checking by callers
-    SystemCapabilityProfile,
-)
+from argus.core.scp import SystemCapabilityProfile
 
 
 def _minimal_scp_dict() -> dict:
