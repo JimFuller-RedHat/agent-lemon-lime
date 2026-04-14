@@ -1,8 +1,9 @@
-"""Tests for the agent-lemon CLI."""
+"""Tests for the agent-lemon and agent-lime CLIs."""
 
 from typer.testing import CliRunner
 
 from agent_lemon_lime.cli.lemon import app
+from agent_lemon_lime.cli.lime import app as lime_app
 
 runner = CliRunner()
 
@@ -33,3 +34,15 @@ def test_cli_action_generates_workflow(tmp_path):
     wf = tmp_path / "agent-lemon.yml"
     assert wf.exists()
     assert "agent-lemon" in wf.read_text()
+
+
+def test_lime_cli_help():
+    result = runner.invoke(lime_app, ["--help"])
+    assert result.exit_code == 0
+    assert "Usage" in result.output
+
+
+def test_lime_cli_monitor_requires_scp(tmp_path):
+    result = runner.invoke(lime_app, ["monitor", "--otel", "http://localhost:4317"])
+    assert result.exit_code != 0
+    assert "scp" in result.output.lower()
