@@ -1,0 +1,19 @@
+name: hello-world-agent
+version: "0.1.0"
+description: "Hello World example agent for testing agent-lemon-lime"
+
+run:
+  command: "python examples/hello_world/agent.py"
+  timeout_seconds: 60
+
+evals:
+  directories:
+    - examples/hello_world/evals
+
+scp:
+  output: ".agent-lemon/hello-world-scp.yaml"
+  assert_file: null
+
+report:
+  output: ".agent-lemon/hello-world-report.md"
+  format: markdown

@@ -1,0 +1,12 @@
+# Eval test cases for the hello world agent
+cases:
+  - name: greeting-responds
+    description: "Agent responds to a greeting"
+    input:
+      prompt: "Say hello."
+    expected_output: "Hello, World!"
+
+  - name: agent-exits-cleanly
+    description: "Agent process exits with code 0"
+    input:
+      command: ["python", "examples/hello_world/agent.py"]
