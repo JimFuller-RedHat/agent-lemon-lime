@@ -212,7 +212,7 @@ requires-dist = [
     { name = "pydantic-graph", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0.0" },
-    { name = "typer", specifier = ">=0.15.0" },
+    { name = "typer", specifier = ">=0.24.0" },
 ]
 
 [package.metadata.requires-dev]
