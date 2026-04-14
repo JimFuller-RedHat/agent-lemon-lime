@@ -99,7 +99,7 @@ class SystemCapabilityProfile(BaseModel):
         return self.model_copy(update={"network_policies": merged_policies})
 
     def assert_subset_of(self, allowed: SystemCapabilityProfile) -> list[str]:
-        """Check that every network policy key in self exists in allowed.
+        """Check that every network policy and host in self is permitted by allowed.
 
         Args:
             allowed: The reference profile defining permitted policies.
@@ -112,6 +112,13 @@ class SystemCapabilityProfile(BaseModel):
             if key not in allowed.network_policies:
                 for ep in policy.endpoints:
                     violations.append(
-                        f"Unauthorized network endpoint {ep.host!r} in policy {key!r}"
+                        f"Unauthorized network endpoint '{ep.host}' in policy '{key}'"
                     )
+            else:
+                allowed_hosts = {ep.host for ep in allowed.network_policies[key].endpoints}
+                for ep in policy.endpoints:
+                    if ep.host not in allowed_hosts:
+                        violations.append(
+                            f"Unauthorized host '{ep.host}' in network policy '{key}'"
+                        )
         return violations
