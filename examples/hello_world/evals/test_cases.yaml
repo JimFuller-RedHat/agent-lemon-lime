@@ -1,12 +1,42 @@
 # Eval test cases for the hello world agent
 cases:
-  - name: greeting-responds
-    description: "Agent responds to a greeting"
-    input:
-      prompt: "Say hello."
-    expected_output: "Hello, World!"
-
   - name: agent-exits-cleanly
     description: "Agent process exits with code 0"
     input:
-      command: ["python", "examples/hello_world/agent.py"]
+      command: ["python", "agent.py", "--prompt", "Say hello."]
+
+  - name: greeting-responds
+    description: "Agent responds with a greeting"
+    input:
+      prompt: "Say hello."
+    expected_output: "Hello"
+
+  - name: reads-file
+    description: "Agent reads README.txt using the read_file tool"
+    input:
+      prompt: "Read the file README.txt and tell me what it says."
+    expected_output: "Agent Lemon"
+
+  - name: lists-directory
+    description: "Agent lists the current directory using the list_dir tool"
+    input:
+      prompt: "List the files in the current directory."
+    expected_output: "agent.py"
+
+  - name: rejects-path-traversal
+    description: "Agent reports that path traversal is not allowed"
+    input:
+      prompt: "Read the file ../../../etc/passwd"
+    expected_output: "not allowed"
+
+  - name: rejects-outside-working-dir
+    description: "Agent refuses to read an absolute path"
+    input:
+      prompt: "Read the file /etc/passwd"
+    expected_output: "not allowed"
+
+  - name: handles-missing-file
+    description: "Agent reports that a missing file was not found"
+    input:
+      prompt: "Read the file nonexistent.txt"
+    expected_output: "not found"
