@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from agent_lemon_lime.config import LemonConfig, RunMode
-from agent_lemon_lime.evals.runner import EvalCase, EvalRunner
+from agent_lemon_lime.config import LemonConfig, RunMode, SandboxConfig
+from agent_lemon_lime.evals.runner import EvalCase, EvalResult, EvalRunner
 from agent_lemon_lime.harness.base import AbstractSandbox
-from agent_lemon_lime.report.models import EvalReport
+from agent_lemon_lime.report.models import EvalReport, InferenceConfig
 from agent_lemon_lime.report.synthesizer import ReportSynthesizer
+from agent_lemon_lime.scp.converter import from_policy_chunks
 from agent_lemon_lime.scp.models import SystemCapabilityProfile
 
 
@@ -23,39 +25,72 @@ class LemonRunResult:
 class LemonAgent:
     """Orchestrates Agent Lemon evaluation runs."""
 
-    def __init__(self, *, config: LemonConfig, sandbox: AbstractSandbox) -> None:
+    def __init__(
+        self,
+        *,
+        config: LemonConfig,
+        sandbox: AbstractSandbox,
+        sandbox_config: SandboxConfig | None = None,
+    ) -> None:
         self.config = config
         self.sandbox = sandbox
+        self._sandbox_config = sandbox_config
         self._runner = EvalRunner()
         self._synthesizer = ReportSynthesizer()
 
-    def _build_observed_scp(self, eval_cases: list[EvalCase]) -> SystemCapabilityProfile:
-        """Build an SCP from observed command usage (discovery-mode approximation).
+    def _inference_config(self) -> InferenceConfig:
+        sc = self._sandbox_config
+        if sc is None:
+            return InferenceConfig()
+        return InferenceConfig(
+            provider=sc.provider,
+            model=sc.model,
+            sandbox_type=sc.type,
+        )
 
-        In a real sandbox integration, we'd parse telemetry. For now, records
-        each unique command name as a process observation without network policies.
+    def _build_observed_scp(self) -> SystemCapabilityProfile:
+        """Build an SCP from sandbox telemetry.
+
+        For OpenshellSandbox, queries the draft policy produced by
+        OpenShell's denial analysis. For other sandbox types, returns
+        a permissive profile as a starting template.
         """
-        seen_commands: set[str] = set()
-        for case in eval_cases:
-            cmd = case.input.command[0] if case.input.command else ""
-            if cmd:
-                seen_commands.add(cmd)
-        return SystemCapabilityProfile()
+        from agent_lemon_lime.harness.openshell import OpenshellSandbox
 
-    def run_discovery(self, *, eval_cases: list[EvalCase]) -> LemonRunResult:
+        if isinstance(self.sandbox, OpenshellSandbox):
+            chunks = self.sandbox.get_draft_policy()
+            return from_policy_chunks(chunks)
+        return SystemCapabilityProfile.permissive()
+
+    def run_discovery(
+        self,
+        *,
+        eval_cases: list[EvalCase],
+        on_result: Callable[[EvalResult], None] | None = None,
+        backend_results: list[EvalResult] | None = None,
+    ) -> LemonRunResult:
         """Run eval cases in discovery mode, building an observed SCP.
 
         Args:
             eval_cases: Evaluation cases to execute against the sandbox.
+            on_result: Optional callback invoked after each case completes.
+            backend_results: Optional pre-computed backend results to include.
 
         Returns:
             LemonRunResult with mode=DISCOVERY, observed SCP, report, and no violations.
         """
-        results = self._runner.run(eval_cases, sandbox=self.sandbox)
-        observed_scp = self._build_observed_scp(eval_cases)
-        report = self._synthesizer.build(results, scp=observed_scp)
+        results = self._runner.run(eval_cases, sandbox=self.sandbox, on_result=on_result)
+        if backend_results:
+            results.extend(backend_results)
+        observed_scp = self._build_observed_scp()
+        report = self._synthesizer.build(
+            results,
+            scp=observed_scp,
+            agent_name=self.config.name,
+            inference=self._inference_config(),
+        )
         return LemonRunResult(
-            mode=RunMode.DISCOVERY,
+            mode=RunMode.DISCOVER,
             scp=observed_scp,
             report=report,
             violations=[],
@@ -67,6 +102,8 @@ class LemonAgent:
         eval_cases: list[EvalCase],
         assert_scp: SystemCapabilityProfile,
         _observed_scp: SystemCapabilityProfile | None = None,
+        on_result: Callable[[EvalResult], None] | None = None,
+        backend_results: list[EvalResult] | None = None,
     ) -> LemonRunResult:
         """Run eval cases in assert mode, checking compliance against allowed SCP.
 
@@ -74,16 +111,26 @@ class LemonAgent:
             eval_cases: Evaluation cases to execute against the sandbox.
             assert_scp: The reference profile defining permitted capabilities.
             _observed_scp: Override the observed SCP (for testing injection only).
+            on_result: Optional callback invoked after each case completes.
+            backend_results: Optional pre-computed backend results to include.
 
         Returns:
             LemonRunResult with mode=ASSERT, observed SCP, report, and any violations.
         """
-        results = self._runner.run(eval_cases, sandbox=self.sandbox)
+        results = self._runner.run(eval_cases, sandbox=self.sandbox, on_result=on_result)
+        if backend_results:
+            results.extend(backend_results)
         observed = (
-            _observed_scp if _observed_scp is not None else self._build_observed_scp(eval_cases)
+            _observed_scp if _observed_scp is not None else self._build_observed_scp()
         )
         violations = observed.assert_subset_of(assert_scp)
-        report = self._synthesizer.build(results, scp=observed, violations=violations)
+        report = self._synthesizer.build(
+            results,
+            scp=observed,
+            agent_name=self.config.name,
+            violations=violations,
+            inference=self._inference_config(),
+        )
         return LemonRunResult(
             mode=RunMode.ASSERT,
             scp=observed,

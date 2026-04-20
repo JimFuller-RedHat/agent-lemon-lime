@@ -12,7 +12,9 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
-from agent_lemon_lime.evals.standard import EvalDomain
+from agent_lemon_lime.config import BackendConfig
+from agent_lemon_lime.evals.runner import EvalResult
+from agent_lemon_lime.evals.standard import EvalDomain, EvalOutput
 
 
 class BackendResult(BaseModel):
@@ -135,3 +137,67 @@ class InspectBackend:
             score=score,
             summary=summary,
         )
+
+
+_BACKEND_REGISTRY: dict[str, type] = {
+    "inspect": InspectBackend,
+}
+
+
+def _get_backend(backend_type: str) -> EvalBackend | None:
+    cls = _BACKEND_REGISTRY.get(backend_type)
+    if cls is None:
+        return None
+    return cls()
+
+
+def _backend_result_to_eval_result(br: BackendResult) -> EvalResult:
+    return EvalResult(
+        name=br.name,
+        passed=br.passed,
+        domain=br.domain,
+        output=EvalOutput(
+            exit_code=0 if br.passed else 1,
+            stdout=br.summary,
+            stderr=br.details,
+            domain=br.domain,
+        ),
+        failures=[] if br.passed else [br.summary],
+    )
+
+
+def run_backends(
+    configs: list[BackendConfig],
+) -> list[EvalResult]:
+    """Run all configured eval backends and return merged EvalResults."""
+    results: list[EvalResult] = []
+    for config in configs:
+        backend = _get_backend(config.type)
+        if backend is None:
+            logger.warning("Unknown backend type: %s", config.type)
+            continue
+        if not backend.available():
+            for task in config.tasks:
+                results.append(EvalResult(
+                    name=f"{backend.name}::{task}",
+                    passed=False,
+                    domain=EvalDomain.BEHAVIORAL,
+                    output=EvalOutput(
+                        exit_code=1,
+                        stdout=f"Backend '{backend.name}' is not installed. "
+                               f"Install it with: pip install inspect-ai",
+                        stderr="",
+                        domain=EvalDomain.BEHAVIORAL,
+                    ),
+                    failures=[f"Backend '{backend.name}' not installed"],
+                ))
+            continue
+        backend_results = backend.run(
+            tasks=config.tasks,
+            model=config.model,
+            score_threshold=config.score_threshold,
+        )
+        results.extend(
+            _backend_result_to_eval_result(br) for br in backend_results
+        )
+    return results

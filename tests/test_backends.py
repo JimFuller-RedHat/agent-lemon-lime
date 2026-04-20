@@ -4,7 +4,9 @@ import json
 import subprocess
 from unittest.mock import patch
 
-from agent_lemon_lime.evals.backends import BackendResult, InspectBackend
+from agent_lemon_lime.config import BackendConfig
+from agent_lemon_lime.evals.backends import BackendResult, InspectBackend, run_backends
+from agent_lemon_lime.evals.runner import EvalResult
 from agent_lemon_lime.evals.standard import EvalDomain
 
 
@@ -166,3 +168,57 @@ def test_inspect_backend_task_errors(tmp_path):
     assert len(results) == 1
     assert results[0].passed is False
     assert "429" in results[0].details
+
+
+def test_run_backends_converts_to_eval_results(tmp_path):
+    log_file = tmp_path / "log.json"
+    log_file.write_text(json.dumps(PASSING_LOG))
+
+    configs = [
+        BackendConfig(
+            type="inspect",
+            model="anthropic/claude-opus-4-6",
+            tasks=["arc"],
+            score_threshold=0.8,
+        ),
+    ]
+
+    def mock_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/inspect"),
+        patch("subprocess.run", side_effect=mock_run),
+        patch("tempfile.mkdtemp", return_value=str(tmp_path)),
+        patch("agent_lemon_lime.evals.backends._find_log_file", return_value=log_file),
+        patch("shutil.rmtree"),
+    ):
+        results = run_backends(configs)
+
+    assert len(results) == 1
+    r = results[0]
+    assert isinstance(r, EvalResult)
+    assert r.name == "inspect::arc"
+    assert r.passed is True
+    assert r.domain == EvalDomain.BEHAVIORAL
+
+
+def test_run_backends_unavailable_backend():
+    configs = [
+        BackendConfig(
+            type="inspect",
+            model="openai/gpt-4o",
+            tasks=["arc"],
+        ),
+    ]
+    with patch("shutil.which", return_value=None):
+        results = run_backends(configs)
+
+    assert len(results) == 1
+    assert results[0].passed is False
+    assert "not installed" in results[0].output.stdout.lower()
+
+
+def test_run_backends_empty_config():
+    results = run_backends([])
+    assert results == []
