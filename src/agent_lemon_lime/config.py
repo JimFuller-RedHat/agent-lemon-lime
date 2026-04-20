@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
+import re
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
+
+
+def resolve_env(env: dict[str, str]) -> dict[str, str]:
+    """Expand ${VAR} references in env values from os.environ."""
+    return {
+        k: re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), v)
+        for k, v in env.items()
+    }
 
 CONFIG_FILENAME = "agent-lemon.yaml"
 
 
 class RunConfig(BaseModel):
     command: str
+    setup: str | None = None
     timeout_seconds: int = 300
     env: dict[str, str] = Field(default_factory=dict)
     workdir: str | None = None
@@ -24,9 +35,17 @@ class SkillSource(BaseModel):
     branch: str = "main"
 
 
+class BackendConfig(BaseModel):
+    type: Literal["inspect"]
+    model: str
+    tasks: list[str]
+    score_threshold: float = 1.0
+
+
 class EvalsConfig(BaseModel):
     directories: list[str] = Field(default_factory=list)
     skills: list[SkillSource] = Field(default_factory=list)
+    backends: list[BackendConfig] = Field(default_factory=list)
 
 
 class SCPConfig(BaseModel):
@@ -36,7 +55,20 @@ class SCPConfig(BaseModel):
 
 class ReportConfig(BaseModel):
     output: str = ".agent-lemon/report.md"
+    log: str | None = None  # defaults to .agent-lemon/{agent-name}.log
     format: Literal["markdown", "json"] = "markdown"
+
+
+class SandboxConfig(BaseModel):
+    type: Literal["local", "openshell"] = "local"
+    cluster: str | None = None
+    timeout: float = 30.0
+    ready_timeout_seconds: float = 120.0
+    auto_start_gateway: bool = True
+    provider: str | None = None
+    model: str | None = None
+    image: str | None = None
+    discovery_policy: str | None = None
 
 
 class LemonConfig(BaseModel):
@@ -47,6 +79,7 @@ class LemonConfig(BaseModel):
     evals: EvalsConfig = Field(default_factory=EvalsConfig)
     scp: SCPConfig = Field(default_factory=SCPConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
     @classmethod
     def from_yaml(cls, text: str) -> LemonConfig:
@@ -68,5 +101,5 @@ class LemonConfig(BaseModel):
 
 
 class RunMode:
-    DISCOVERY = "discovery"
+    DISCOVER = "discover"
     ASSERT = "assert"

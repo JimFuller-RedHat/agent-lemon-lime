@@ -13,6 +13,7 @@ class EvalDomain(StrEnum):
     STABILITY = "stability"
     CORRECTNESS = "correctness"
     SECURITY = "security"
+    BEHAVIORAL = "behavioral"
 
 
 class EvalOutput(BaseModel):
