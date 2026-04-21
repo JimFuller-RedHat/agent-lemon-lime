@@ -4,7 +4,21 @@
 
 **Goal:** Build a Python package (`agent-lemon-lime`) providing two agents — Agent Lemon (CI/eval orchestrator) and Agent Lime (production runtime monitor) — that evaluate AI agents for safety, stability, correctness, and security using OpenShell sandboxes and pydantic-evals.
 
-**Architecture:** Agent Lemon runs an agent-under-test inside an OpenShell sandbox (mock-first for local/CI, real cluster for production), intercepts tool calls to enumerate capabilities, runs standard + custom evals, generates an SCP capability profile YAML, and synthesises a report. Agent Lime attaches to a running production agent via OTEL endpoint, asserts the SCP, runs adversarial checks, and continuously reports anomalies. Both share a common eval core and report format.
+**Architecture:** Two agents with complementary but distinct roles.
+
+**Agent Lemon** (execution-based, active): Runs the agent-under-test as a subprocess with
+specific inputs, collects outputs, generates an SCP capability profile YAML, and synthesises
+a report. Custom eval cases are defined per-agent in `agent-lemon.yaml`. Answers: *"Does the
+agent produce the right outputs for given inputs?"* Mock-first for local/CI; real OpenShell
+cluster for production sandboxing.
+
+**Agent Lime** (observation-based, passive): Attaches via OTEL telemetry to any running agent
+workload without caring how the agent is invoked (CLI, HTTP, gRPC, event-driven — irrelevant).
+Uses a session-bracket model: start Lime → let the agent do real work → stop Lime → assert
+SCP compliance and report anomalies. Evals are generic and universal. Answers: *"What did the
+agent actually do, and was it within bounds?"*
+
+Both share a common SCP format and report structure.
 
 **Tech Stack:** Python 3.13, pydantic-ai, pydantic-evals, pydantic-deep (`create_deep_agent`), openshell (gRPC sandbox), typer + rich (CLI), PyYAML (SCP serialisation), opentelemetry-sdk (Lime OTEL receiver), uv, ruff, ty.
 
@@ -1694,7 +1708,17 @@ Assisted-by: Claude"
 
 ## Task 10: Agent Lime
 
-Agent Lime attaches to a running production agent via an OTEL endpoint, asserts SCP compliance, detects anomalies, and reports continuously.
+Agent Lime is an observation-based monitor. It attaches passively via OTEL telemetry to any
+running agent workload — it does not care whether the agent is a CLI, HTTP server, gRPC
+service, or event consumer. The usage model is a session bracket:
+
+1. Start Lime (begin observing)
+2. Let the agent do real work (run tests, handle interactions, process a batch — anything)
+3. Stop Lime (end observation window)
+4. Assert SCP compliance and report anomalies
+
+This is fundamentally different from Lemon: Lime never runs the agent. It only watches what
+the agent does via OTEL spans and asserts that observed behaviour is within the declared SCP.
 
 **Files:**
 - Create: `src/agent_lemon_lime/agents/lime.py`
@@ -2105,7 +2129,10 @@ Assisted-by: Claude"
 
 ## Task 12: CLI — agent-lime
 
-The `agent-lime` typer app attaches to a running agent via OTEL endpoint and monitors it.
+The `agent-lime` typer app implements the session-bracket observation model: it attaches via
+OTEL endpoint and either runs continuously or for a bounded session (start → observe → stop →
+report). The agent under observation can be anything — the CLI does not need to know how to
+invoke it.
 
 **Files:**
 - Create: `src/agent_lemon_lime/cli/lime.py`

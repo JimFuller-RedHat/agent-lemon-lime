@@ -4,11 +4,21 @@ This is the canonical repo for the agent-lemon-agent-lime system.
 
 ## What this repo is
 
-agent-lemon-lime provides two AI agents:
-- **Agent Lemon**: CI/eval orchestrator — runs an agent-under-test in a sandbox,
-  generates a Secure Capability Profile (SCP) YAML, and synthesises an eval report.
-- **Agent Lime**: Production runtime monitor — attaches via OTEL endpoint, asserts SCP
-  compliance, detects anomalies, and reports continuously.
+agent-lemon-lime provides two AI agents with complementary but distinct roles:
+
+- **Agent Lemon**: Execution-based CI evaluator. Runs an agent-under-test as a subprocess
+  with specific inputs, collects outputs, and answers: *"Does the agent produce the right
+  outputs for given inputs?"* Generates a Secure Capability Profile (SCP) YAML and a report.
+  Eval cases are custom to each agent under test (defined in `agent-lemon.yaml`).
+
+- **Agent Lime**: Observation-based runtime monitor. Attaches passively via OTEL telemetry
+  to any running agent workload (tests, interactions, production traffic) without caring how
+  the agent is invoked. Answers: *"What did the agent actually do, and was it within bounds?"*
+  Uses a session-bracket model: start Lime → let the agent do real work → stop Lime → report
+  and assert SCP compliance. Evals are generic and universal (no custom entry point required).
+
+**Key distinction:** Lemon is active (it runs the agent). Lime is passive (it observes the
+agent). Lemon evals are custom per-agent. Lime evals are generic across all agents.
 
 ## Repository layout
 
@@ -42,7 +52,6 @@ agent-lemon-lime provides two AI agents:
 - `SystemCapabilityProfile.to_yaml(path)` creates parent directories automatically
 
 ## Key files
-- Policy: [REDHAT.md](REDHAT.md)
 - Config schema: `src/agent_lemon_lime/config.py`
 - SCP models: `src/agent_lemon_lime/scp/models.py`
 - Agent Lemon: `src/agent_lemon_lime/agents/lemon.py`

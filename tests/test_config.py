@@ -174,3 +174,28 @@ def test_config_backend_score_threshold_default():
     """)
     config = LemonConfig.from_yaml(yaml_text)
     assert config.evals.backends[0].score_threshold == 1.0
+
+
+def test_report_config_model_field():
+    yaml_text = """\
+name: test-agent
+version: "0.1.0"
+run:
+  command: "python agent.py"
+report:
+  output: ".agent-lemon/report.md"
+  model: anthropic/claude-sonnet-4-20250514
+"""
+    config = LemonConfig.from_yaml(yaml_text)
+    assert config.report.model == "anthropic/claude-sonnet-4-20250514"
+
+
+def test_report_config_model_defaults_to_none():
+    yaml_text = """\
+name: test-agent
+version: "0.1.0"
+run:
+  command: "python agent.py"
+"""
+    config = LemonConfig.from_yaml(yaml_text)
+    assert config.report.model is None

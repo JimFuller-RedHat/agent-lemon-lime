@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <!-- Lemon body -->
+  <ellipse cx="100" cy="140" rx="55" ry="45" fill="#FFD700" stroke="#E6BE00" stroke-width="2"/>
+  <!-- Lemon highlight -->
+  <ellipse cx="85" cy="125" rx="25" ry="15" fill="#FFEC80" opacity="0.5" transform="rotate(-20 85 125)"/>
+  <!-- Lemon tip left -->
+  <ellipse cx="48" cy="130" rx="12" ry="6" fill="#FFD700" stroke="#E6BE00" stroke-width="1.5" transform="rotate(-15 48 130)"/>
+  <!-- Lemon tip right -->
+  <ellipse cx="152" cy="130" rx="12" ry="6" fill="#FFD700" stroke="#E6BE00" stroke-width="1.5" transform="rotate(15 152 130)"/>
+  <!-- Leaf -->
+  <path d="M100 95 Q108 75 120 80 Q112 95 100 95Z" fill="#4CAF50" stroke="#388E3C" stroke-width="1"/>
+  <!-- Stem -->
+  <line x1="100" y1="95" x2="100" y2="88" stroke="#795548" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Fedora hat -->
+  <!-- Brim -->
+  <ellipse cx="100" cy="100" rx="72" ry="14" fill="#2C2C2C" stroke="#1a1a1a" stroke-width="1.5"/>
+  <!-- Crown base -->
+  <path d="M55 100 Q55 60 75 50 L125 50 Q145 60 145 100Z" fill="#333333" stroke="#1a1a1a" stroke-width="1.5"/>
+  <!-- Crown indent -->
+  <path d="M70 55 Q100 65 130 55 Q125 50 75 50Z" fill="#3d3d3d"/>
+  <!-- Hat band -->
+  <rect x="58" y="88" width="84" height="8" rx="2" fill="#1a1a1a"/>
+  <!-- Band buckle -->
+  <rect x="94" y="87" width="12" height="10" rx="1" fill="#C0A000" stroke="#8B7500" stroke-width="0.5"/>
+  <rect x="97" y="89" width="6" height="6" rx="0.5" fill="#333333"/>
+
+  <!-- Eyes -->
+  <ellipse cx="82" cy="132" rx="7" ry="8" fill="white" stroke="#333" stroke-width="1.5"/>
+  <ellipse cx="118" cy="132" rx="7" ry="8" fill="white" stroke="#333" stroke-width="1.5"/>
+  <!-- Pupils -->
+  <circle cx="84" cy="133" r="3.5" fill="#333"/>
+  <circle cx="120" cy="133" r="3.5" fill="#333"/>
+  <!-- Eye glints -->
+  <circle cx="86" cy="131" r="1.2" fill="white"/>
+  <circle cx="122" cy="131" r="1.2" fill="white"/>
+
+  <!-- Smirk -->
+  <path d="M88 152 Q100 162 116 150" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"/>
+</svg>

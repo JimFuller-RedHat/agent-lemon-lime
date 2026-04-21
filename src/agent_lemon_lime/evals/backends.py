@@ -102,11 +102,15 @@ class InspectBackend:
             )
             log_file = _find_log_file(Path(log_dir))
             if log_file is None:
+                output = proc.stderr.strip() or proc.stdout.strip()
+                hint = ""
+                if proc.returncode != 0:
+                    hint = f" (exit code {proc.returncode})"
                 return BackendResult(
                     name=f"inspect::{task}",
                     passed=False,
-                    summary=f"No log file produced for task '{task}'",
-                    details=proc.stderr,
+                    summary=f"No log file for '{task}'{hint}",
+                    details=output or "No output from inspect eval",
                 )
             log_data = json.loads(log_file.read_text())
             return self._parse_log(task, log_data, score_threshold)

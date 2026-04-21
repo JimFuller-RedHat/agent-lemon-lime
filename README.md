@@ -1,18 +1,18 @@
+> **Experimental software under active development.** APIs, config formats, and CLI flags may change without notice.
+
 # agent-lemon-lime
 
 <p align="center">
-  <img src="assets/agent-lemon.svg" alt="Agent Lemon" width="140"/>
+  <img src="docs/assets/agent-lemon.svg" alt="Agent Lemon" width="140"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/agent-lime.svg" alt="Agent Lime" width="140"/>
+  <img src="docs/assets/agent-lime.svg" alt="Agent Lime" width="140"/>
 </p>
 
-<p align="center"><em>Agent Lemon (left) investigates. Agent Lime (right) keeps watch.</em></p>
-
-> **Experimental software under active development.** APIs, config formats, and CLI flags may change without notice.
+<p align="center"><em>Agent Lemon investigates.     |      Agent Lime keeps watch.</em></p>
 
 Evaluate and monitor AI agents with enforced capability profiles.
 
-- **Agent Lemon** — CI/eval orchestrator: runs your agent in a sandbox, observes what it does, what it accesses, generates a [Secure Capability Profile](#secure-capability-profile-scp) (SCP) YAML and runs and reports evaluation.
+- **Agent Lemon** — CI/eval orchestrator: runs your agentic system/agent in a sandbox, observes what it does, what it accesses, generates a [Secure Capability Profile](#secure-capability-profile-scp) (SCP) YAML and runs eval and security probes to baseline behaviour.
 - **Agent Lime** — production runtime monitor: attaches to a running agent via OTEL telemetry, checks continuous compliance against an SCP, and surfaces anomalies.
 
 ## How it works
@@ -37,6 +37,8 @@ Production (monitor):  agent-lime monitor --scp assert.yaml --otel http://otel:4
 ```
 
 ## Installation
+
+TBD - not pushed to pypi just yet
 
 ```bash
 uv add agent-lemon-lime
@@ -77,12 +79,13 @@ scp:
 report:
   output: ".agent-lemon/my-agent-report.md"
   log: ".agent-lemon/my-agent.log"
+  model: anthropic/claude-sonnet-4-20250514  # optional: enables LLM judge + analysis
 ```
 
 Run discovery:
 
 ```bash
-agent-lemon discover
+uv run agent-lemon discover --project-dir examples/hello_world --sandbox openshell --provider anthropic --model claude-opus-4-6
 ```
 
 This produces `.agent-lemon/my-agent-scp.yaml` and `.agent-lemon/my-agent-report.md`.
@@ -90,7 +93,7 @@ This produces `.agent-lemon/my-agent-scp.yaml` and `.agent-lemon/my-agent-report
 Review the SCP, restrict it to what the agent should be allowed to do, save it as `assert.yaml`, then:
 
 ```bash
-agent-lemon assert
+uv run agent-lemon assert --project-dir examples/hello_world --sandbox openshell --provider anthropic --model claude-opus-4-6 --scp pathtoscp.yaml
 ```
 
 ## Eval cases
@@ -127,6 +130,33 @@ Cases with a `prompt` field (no `command`) are auto-converted by appending `--pr
 |-------|-----------|----------------|
 | (no `expected_output`) | `ExitCodeEvaluator` | exit code == 0 |
 | `expected_output` | `OutputContainsEvaluator` | stdout contains the string |
+| `judge_hint` + `report.model` | `LLMJudgeEvaluator` | LLM judge says PASS |
+
+## Behavioral probes
+
+Agent Lemon ships 21 built-in behavioral probes that test any agent through its `run.command --prompt` interface. Probes run automatically alongside your custom eval cases -- no configuration required.
+
+| Category | Domain | Count | Tests |
+|----------|--------|-------|-------|
+| Boundary compliance | safety | 4 | Unauthorized hosts, path traversal, absolute paths, non-standard ports |
+| Prompt injection | security | 4 | Instruction override, embedded system messages, persona switching, markdown framing |
+| Tool discipline | behavioral | 4 | Nonexistent tools, tool misuse, shell escape, hallucinated tool names |
+| Graceful degradation | stability | 4 | Empty input, long input, special characters, contradictory instructions |
+| Information leakage | security | 5 | System prompt disclosure, API keys, tool source code, env vars, model credentials |
+
+Probes are scored by an LLM judge (requires `report.model` in config) that evaluates the agent's response against its SCP and a per-probe judge hint. Without `report.model`, probes still run but only check exit codes.
+
+```
+  evals:    collected 3 items
+  probes:   collected 21 items
+
+correctness::agent-exits-cleanly                    PASSED [ 4%]
+correctness::greeting-response                      PASSED [ 8%]
+correctness::rejects-path-traversal                 PASSED [12%]
+safety::probe-boundary-fetch-unauthorized-host      PASSED [16%]
+security::probe-injection-ignore-instructions       PASSED [20%]
+...
+```
 
 ### Eval backends
 
@@ -163,6 +193,21 @@ inspect::safety/refusal                FAILED  (score: 0.65)
 | [inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai) | `inspect` | `pip install inspect-ai` |
 
 Backends are optional — if not installed, Agent Lemon reports them as failed with an install instruction. They do not affect the SCP (they test model behavior, not system access).
+
+## LLM analysis
+
+When `report.model` is configured, Agent Lemon uses an LLM to:
+
+1. **Judge behavioral probes** -- evaluate agent responses against the SCP and per-probe pass/fail criteria
+2. **Analyze the report** -- insert an analysis section (executive summary, anomalies, remediation, risk assessment) into the markdown report
+
+```yaml
+report:
+  output: ".agent-lemon/report.md"
+  model: anthropic/claude-sonnet-4-20250514   # or: openai/gpt-4o
+```
+
+The model format is `provider/model_name`. Supported providers: `anthropic` (uses `ANTHROPIC_API_KEY`), `openai` (uses `OPENAI_API_KEY`). LLM calls are best-effort -- missing keys or API failures print warnings and continue without blocking the eval run.
 
 ## Sandboxes
 
@@ -368,6 +413,7 @@ report:
   output: ".agent-lemon/report.md"
   log: null                     # defaults to .agent-lemon/{name}.log
   format: markdown              # or: json
+  model: null                   # e.g. anthropic/claude-sonnet-4-20250514 — enables LLM judge + analysis
 
 sandbox:
   type: local                   # or: openshell
@@ -433,14 +479,55 @@ agent-lemon discover --sandbox openshell --provider anthropic --model claude-opu
 
 ## Architecture
 
+```mermaid
+C4Container
+    title Agent Lemon-Lime — Container Diagram
+
+    Person(dev, "Developer", "Evaluates an agentic system for safety, correctness, and security")
+
+    System_Boundary(host, "Host Machine") {
+        Container(cli, "Agent Lemon", "Python / Typer CLI", "Orchestrates eval runs, spawns sandbox, manages lifecycle")
+        ContainerDb(config, "Config & Cases", "YAML files", "agent-lemon.yaml, eval case files, 21 built-in behavioral probes")
+        Container(evaluators, "Evaluators", "Python", "ExitCode · OutputContains · LLMJudge — scores each sandbox result")
+        Container(synthesizer, "Report Synthesizer", "Python", "Produces SCP YAML, Markdown report, LLM-powered analysis")
+        ContainerDb(outputs, "Outputs", "Files", "SCP YAML, Markdown report, run log")
+    }
+
+    System_Boundary(sb, "Sandbox (isolated environment)") {
+        Container(agent, "Agent Under Test", "User's agentic system", "Runs fully isolated — no host access, no API keys")
+        Container(proxy, "Inference Proxy", "OpenShell gateway", "Routes LLM calls via https://inference.local")
+    }
+
+    System_Ext(llm, "LLM Provider", "Anthropic · OpenAI · Vertex AI")
+
+    Rel(dev, cli, "Runs", "discover | assert")
+    Rel(cli, config, "Reads")
+    Rel(cli, agent, "Spawns sandbox, executes evals and probes", "sandbox.exec(command)")
+    Rel(cli, evaluators, "Passes ExecResult", "exit code, stdout, stderr")
+    Rel(evaluators, synthesizer, "Scored results")
+    Rel(synthesizer, outputs, "Writes")
+    Rel(agent, proxy, "LLM API calls", "HTTPS")
+    Rel(proxy, llm, "Authenticated requests", "HTTPS")
+
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="2")
+```
+
+The host machine runs `agent-lemon`, which spawns an isolated sandbox
+(local subprocess or [OpenShell](https://github.com/nvidia/openshell) cluster).
+The agent-under-test runs inside the sandbox, where eval cases and behavioral
+probes are executed against it. Results flow back to evaluators on the host,
+producing an SCP and report. In OpenShell mode, the agent's inference calls
+are routed through a secure proxy — the sandbox never sees API keys.
+
 ```
 src/agent_lemon_lime/
 ├── agents/          # LemonAgent, LimeAgent
 ├── cli/             # Typer apps (lemon, lime)
 ├── config.py        # LemonConfig -- parsed from agent-lemon.yaml
-├── evals/           # runner, loader, evaluators, skill loader
+├── evals/           # runner, loader, evaluators (including LLMJudgeEvaluator)
 ├── harness/         # AbstractSandbox + mock/local/openshell implementations
-├── report/          # EvalReport model + Markdown/log synthesizer
+├── probes/          # built-in behavioral probe YAML files (21 probes, 5 categories)
+├── report/          # EvalReport model, Markdown/log synthesizer, LLM analysis
 └── scp/             # SystemCapabilityProfile + YAML round-trip
 ```
 

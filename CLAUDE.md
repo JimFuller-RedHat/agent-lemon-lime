@@ -5,8 +5,9 @@ This repository uses **AGENTS.md** as the canonical description of architecture,
 ## Before making changes
 
 1. Read `AGENTS.md`.
-2. Follow `REDHAT.md` for Red Hat AI policy (attribution, sensitive data, upstream).
-3. Prefer small, reviewable steps; ask for constraints (ex. single skills, dependencies).
+2. Follow `CONTRIBUTING.md` to make contributions to the codebase
+3. Follow `REDHAT.md` for Red Hat AI policy (attribution, sensitive data, upstream).
+4. Prefer small, reviewable steps; ask for constraints (ex. single skills, dependencies).
 
 ## Working agreements
 

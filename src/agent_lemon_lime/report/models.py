@@ -20,9 +20,18 @@ class EvalSummary:
 
 
 @dataclass
+class InferenceConfig:
+    provider: str | None = None
+    model: str | None = None
+    sandbox_type: str = "local"
+
+
+@dataclass
 class EvalReport:
+    agent_name: str
     generated_at: str
     summary: EvalSummary
     results: list[EvalResult]
     scp: SystemCapabilityProfile
     violations: list[str] = field(default_factory=list)
+    inference: InferenceConfig = field(default_factory=InferenceConfig)

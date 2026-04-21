@@ -24,7 +24,7 @@ def test_lemon_discovery_returns_result():
     agent = LemonAgent(config=config, sandbox=sandbox)
     result = agent.run_discovery(eval_cases=[])
     assert isinstance(result, LemonRunResult)
-    assert result.mode == RunMode.DISCOVERY
+    assert result.mode == RunMode.DISCOVER
     assert result.scp is not None
     assert result.report is not None
     assert result.violations == []
@@ -51,8 +51,7 @@ def test_lemon_discovery_with_cases():
 def test_lemon_assert_no_violations():
     config = LemonConfig.from_yaml(MINIMAL_CONFIG)
     sandbox = MockSandbox()
-    # SCP allows everything (empty = no restrictions asserted)
-    allowed_scp = SystemCapabilityProfile()
+    allowed_scp = SystemCapabilityProfile.permissive()
     agent = LemonAgent(config=config, sandbox=sandbox)
     result = agent.run_assert(eval_cases=[], assert_scp=allowed_scp)
     assert result.mode == RunMode.ASSERT

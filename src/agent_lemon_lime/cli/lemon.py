@@ -255,9 +255,13 @@ def _configure_inference(config: SandboxConfig) -> None:
         raise typer.Exit(code=1)
 
     cmd = [
-        "openshell", "inference", "set",
-        "--provider", config.provider,
-        "--model", config.model,
+        "openshell",
+        "inference",
+        "set",
+        "--provider",
+        config.provider,
+        "--model",
+        config.model,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -270,8 +274,7 @@ def _configure_inference(config: SandboxConfig) -> None:
         raise typer.Exit(code=1)
 
     console.print(
-        f"[green]Inference configured:[/green] "
-        f"provider={config.provider}, model={config.model}"
+        f"[green]Inference configured:[/green] provider={config.provider}, model={config.model}"
     )
 
 
@@ -297,13 +300,10 @@ def _resolve_discovery_policy(
             scp = SystemCapabilityProfile.from_yaml(config.discovery_policy)
         except FileNotFoundError:
             console.print(
-                f"[red]Error:[/red] Discovery policy not found: "
-                f"{config.discovery_policy}"
+                f"[red]Error:[/red] Discovery policy not found: {config.discovery_policy}"
             )
             raise typer.Exit(code=1) from None
-        console.print(
-            f"[dim]Discovery policy:[/dim] {config.discovery_policy}"
-        )
+        console.print(f"[dim]Discovery policy:[/dim] {config.discovery_policy}")
     else:
         scp = SystemCapabilityProfile.discovery()
         console.print("[dim]Discovery policy:[/dim] built-in (deny-by-default)")
@@ -383,11 +383,16 @@ def discover(
         float | None,
         typer.Option("--ready-timeout", help="Sandbox ready timeout in seconds"),
     ] = None,
+    backends_only: Annotated[
+        bool,
+        typer.Option("--backends-only", help="Only run eval backends, skip sandbox evals"),
+    ] = False,
 ) -> None:
     """Discover capabilities: run evals and generate SCP profile + report."""
     from agent_lemon_lime.agents.lemon import LemonAgent
     from agent_lemon_lime.evals.loader import (
         default_case_from_config,
+        load_builtin_probes,
         load_cases_from_config,
         load_cases_from_sandbox,
     )
@@ -404,61 +409,147 @@ def discover(
 
     project = pathlib.Path(project_dir).resolve()
 
-    sandbox_config = _resolve_sandbox_config(
-        config, sandbox, no_auto_start_gateway, provider, model,
-        image_flag=image, discovery_policy_flag=discovery_policy,
-        ready_timeout_flag=ready_timeout,
-    )
-    if verbose:
-        _print_setup(config, sandbox_config)
-
-    sbx = _create_sandbox(
-        sandbox_config, workdir=str(project),
-        setup_command=config.run.setup,
-        discovery=True, permissive_flag=permissive,
-    )
-
-    image_only = sandbox_config.image is not None and sandbox_config.type == "openshell"
-    if image_only:
-        sbx.__enter__()
-        cases = load_cases_from_sandbox(config, sandbox=sbx)
-    else:
-        cases = load_cases_from_config(config, project_dir=project)
-
-    smoke_test = not cases
-    if smoke_test:
-        cases = [default_case_from_config(config)]
-
-    backend_task_count = sum(len(b.tasks) for b in config.evals.backends)
-    n = len(cases) + backend_task_count
-    note = " [dim](smoke test from run.command)[/dim]" if smoke_test else ""
-    console.print(f"collected {n} item{'s' if n != 1 else ''}{note}\n")
-
-    on_result, _ = _make_result_printer(n, verbose=verbose)
-    agent = LemonAgent(config=config, sandbox=sbx, sandbox_config=sandbox_config)
-
     from agent_lemon_lime.evals.backends import run_backends
 
-    backend_results = run_backends(config.evals.backends)
-    for br in backend_results:
-        if on_result:
+    if backends_only:
+        backend_results = run_backends(config.evals.backends)
+        if not backend_results:
+            console.print("[yellow]No backends configured.[/yellow]")
+            raise typer.Exit(code=1)
+        n = len(backend_results)
+        console.print(f"collected {n} item{'s' if n != 1 else ''}\n")
+        on_result, _ = _make_result_printer(n, verbose=verbose)
+        for br in backend_results:
             on_result(br)
 
-    result = agent.run_discovery(
-        eval_cases=cases, on_result=on_result, backend_results=backend_results,
-    )
+        from agent_lemon_lime.harness.local import LocalSandbox
 
-    if image_only:
-        sbx.__exit__(None, None, None)
+        sbx = LocalSandbox(workdir=str(project))
+        agent = LemonAgent(config=config, sandbox=sbx)
+        result = agent.run_discovery(
+            eval_cases=[],
+            on_result=on_result,
+            backend_results=backend_results,
+        )
+    else:
+        sandbox_config = _resolve_sandbox_config(
+            config,
+            sandbox,
+            no_auto_start_gateway,
+            provider,
+            model,
+            image_flag=image,
+            discovery_policy_flag=discovery_policy,
+            ready_timeout_flag=ready_timeout,
+        )
+        if verbose:
+            _print_setup(config, sandbox_config)
+
+        sbx = _create_sandbox(
+            sandbox_config,
+            workdir=str(project),
+            setup_command=config.run.setup,
+            discovery=True,
+            permissive_flag=permissive,
+        )
+
+        image_only = sandbox_config.image is not None and sandbox_config.type == "openshell"
+        if image_only:
+            sbx.__enter__()
+            cases = load_cases_from_sandbox(config, sandbox=sbx)
+        else:
+            cases = load_cases_from_config(config, project_dir=project)
+
+        smoke_test = not cases
+        if smoke_test:
+            cases = [default_case_from_config(config)]
+
+        import shlex
+
+        from agent_lemon_lime.config import resolve_env
+
+        config_yaml_path = project.joinpath("agent-lemon.yaml")
+        config_text = config_yaml_path.read_text() if config_yaml_path.exists() else ""
+        run_cmd = shlex.split(config.run.command)
+        resolved_env = resolve_env(config.run.env) if config.run.env else {}
+        probe_cases = load_builtin_probes(
+            run_command=run_cmd,
+            run_env=resolved_env,
+            model=config.report.model,
+            scp_yaml="",
+            config_yaml=config_text,
+        )
+
+        backend_task_count = sum(len(b.tasks) for b in config.evals.backends)
+        eval_note = " [dim](smoke test from run.command)[/dim]" if smoke_test else ""
+        console.print()
+        console.print(
+            f"  evals:    collected {len(cases)} item{'s' if len(cases) != 1 else ''}{eval_note}"
+        )
+        console.print(
+            f"  probes:   collected {len(probe_cases)} item{'s' if len(probe_cases) != 1 else ''}"
+        )
+        if backend_task_count:
+            console.print(
+                f"  backends: collected {backend_task_count}"
+                f" item{'s' if backend_task_count != 1 else ''}"
+            )
+        console.print()
+
+        cases = cases + probe_cases
+        n = len(cases) + backend_task_count
+        on_result, _ = _make_result_printer(n, verbose=verbose)
+        agent = LemonAgent(
+            config=config,
+            sandbox=sbx,
+            sandbox_config=sandbox_config,
+        )
+
+        backend_results = run_backends(config.evals.backends)
+        for br in backend_results:
+            if on_result:
+                on_result(br)
+
+        result = agent.run_discovery(
+            eval_cases=cases,
+            on_result=on_result,
+            backend_results=backend_results,
+        )
+
+        if image_only:
+            sbx.__exit__(None, None, None)
 
     scp_path = scp or config.scp.output
     result.scp.to_yaml(scp_path)
 
     synthesizer = ReportSynthesizer()
     report_path = report or config.report.output
-    synthesizer.write(result.report, path=report_path)
-
     log_path = _log_path(config)
+    run_log = synthesizer.to_log(result.report, mode="discover")
+    md = synthesizer.to_markdown(result.report)
+
+    if config.report.model:
+        from agent_lemon_lime.report.analyzer import analyze_report, insert_analysis
+
+        config_yaml = pathlib.Path(project_dir).resolve().joinpath("agent-lemon.yaml")
+        config_text = config_yaml.read_text() if config_yaml.exists() else ""
+        console.print("[dim]Running LLM analysis...[/dim]")
+        analysis = analyze_report(
+            result.report,
+            model=config.report.model,
+            config_yaml=config_text,
+            log_text=run_log,
+        )
+        if analysis:
+            md = insert_analysis(md, analysis)
+            console.print("[green]Analysis complete.[/green]")
+        else:
+            console.print("[yellow]Analysis skipped (see warnings above).[/yellow]")
+
+    p = pathlib.Path(report_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(md)
+
     synthesizer.write_log(result.report, path=log_path, mode="discover")
 
     _print_failures(result.report.results, verbose=verbose)
@@ -501,11 +592,16 @@ def assert_cmd(
         float | None,
         typer.Option("--ready-timeout", help="Sandbox ready timeout in seconds"),
     ] = None,
+    backends_only: Annotated[
+        bool,
+        typer.Option("--backends-only", help="Only run eval backends, skip sandbox evals"),
+    ] = False,
 ) -> None:
     """Assert mode: run evals against a defined SCP and report violations."""
     from agent_lemon_lime.agents.lemon import LemonAgent
     from agent_lemon_lime.evals.loader import (
         default_case_from_config,
+        load_builtin_probes,
         load_cases_from_config,
         load_cases_from_sandbox,
     )
@@ -537,54 +633,146 @@ def assert_cmd(
 
     project = pathlib.Path(project_dir).resolve()
 
-    sandbox_config = _resolve_sandbox_config(
-        config, sandbox, no_auto_start_gateway, provider, model,
-        image_flag=image, ready_timeout_flag=ready_timeout,
-    )
-    if verbose:
-        _print_setup(config, sandbox_config)
-
-    sbx = _create_sandbox(sandbox_config, workdir=str(project), setup_command=config.run.setup)
-
-    image_only = sandbox_config.image is not None and sandbox_config.type == "openshell"
-    if image_only:
-        sbx.__enter__()
-        cases = load_cases_from_sandbox(config, sandbox=sbx)
-    else:
-        cases = load_cases_from_config(config, project_dir=project)
-
-    smoke_test = not cases
-    if smoke_test:
-        cases = [default_case_from_config(config)]
-
-    backend_task_count = sum(len(b.tasks) for b in config.evals.backends)
-    n = len(cases) + backend_task_count
-    note = " [dim](smoke test from run.command)[/dim]" if smoke_test else ""
-    console.print(f"collected {n} item{'s' if n != 1 else ''}{note}\n")
-
-    on_result, _ = _make_result_printer(n, verbose=verbose)
-    agent = LemonAgent(config=config, sandbox=sbx, sandbox_config=sandbox_config)
-
     from agent_lemon_lime.evals.backends import run_backends
 
-    backend_results = run_backends(config.evals.backends)
-    for br in backend_results:
-        if on_result:
+    if backends_only:
+        backend_results = run_backends(config.evals.backends)
+        if not backend_results:
+            console.print("[yellow]No backends configured.[/yellow]")
+            raise typer.Exit(code=1)
+        n = len(backend_results)
+        console.print(f"collected {n} item{'s' if n != 1 else ''}\n")
+        on_result, _ = _make_result_printer(n, verbose=verbose)
+        for br in backend_results:
             on_result(br)
 
-    result = agent.run_assert(
-        eval_cases=cases, assert_scp=assert_scp,
-        on_result=on_result, backend_results=backend_results,
-    )
+        from agent_lemon_lime.harness.local import LocalSandbox
 
-    if image_only:
-        sbx.__exit__(None, None, None)
+        sbx = LocalSandbox(workdir=str(project))
+        agent = LemonAgent(config=config, sandbox=sbx)
+        result = agent.run_assert(
+            eval_cases=[],
+            assert_scp=assert_scp,
+            on_result=on_result,
+            backend_results=backend_results,
+        )
+    else:
+        sandbox_config = _resolve_sandbox_config(
+            config,
+            sandbox,
+            no_auto_start_gateway,
+            provider,
+            model,
+            image_flag=image,
+            ready_timeout_flag=ready_timeout,
+        )
+        if verbose:
+            _print_setup(config, sandbox_config)
+
+        sbx = _create_sandbox(
+            sandbox_config,
+            workdir=str(project),
+            setup_command=config.run.setup,
+        )
+
+        image_only = sandbox_config.image is not None and sandbox_config.type == "openshell"
+        if image_only:
+            sbx.__enter__()
+            cases = load_cases_from_sandbox(config, sandbox=sbx)
+        else:
+            cases = load_cases_from_config(config, project_dir=project)
+
+        smoke_test = not cases
+        if smoke_test:
+            cases = [default_case_from_config(config)]
+
+        import shlex
+
+        import yaml
+
+        from agent_lemon_lime.config import resolve_env
+
+        config_yaml_path = project.joinpath("agent-lemon.yaml")
+        config_text = config_yaml_path.read_text() if config_yaml_path.exists() else ""
+        run_cmd = shlex.split(config.run.command)
+        resolved_env = resolve_env(config.run.env) if config.run.env else {}
+        scp_text = yaml.dump(assert_scp.model_dump(exclude_defaults=True), sort_keys=False)
+        probe_cases = load_builtin_probes(
+            run_command=run_cmd,
+            run_env=resolved_env,
+            model=config.report.model,
+            scp_yaml=scp_text,
+            config_yaml=config_text,
+        )
+
+        backend_task_count = sum(len(b.tasks) for b in config.evals.backends)
+        eval_note = " [dim](smoke test from run.command)[/dim]" if smoke_test else ""
+        console.print()
+        console.print(
+            f"  evals:    collected {len(cases)} item{'s' if len(cases) != 1 else ''}{eval_note}"
+        )
+        console.print(
+            f"  probes:   collected {len(probe_cases)} item{'s' if len(probe_cases) != 1 else ''}"
+        )
+        if backend_task_count:
+            console.print(
+                f"  backends: collected {backend_task_count}"
+                f" item{'s' if backend_task_count != 1 else ''}"
+            )
+        console.print()
+
+        cases = cases + probe_cases
+        n = len(cases) + backend_task_count
+        on_result, _ = _make_result_printer(n, verbose=verbose)
+        agent = LemonAgent(
+            config=config,
+            sandbox=sbx,
+            sandbox_config=sandbox_config,
+        )
+
+        backend_results = run_backends(config.evals.backends)
+        for br in backend_results:
+            if on_result:
+                on_result(br)
+
+        result = agent.run_assert(
+            eval_cases=cases,
+            assert_scp=assert_scp,
+            on_result=on_result,
+            backend_results=backend_results,
+        )
+
+        if image_only:
+            sbx.__exit__(None, None, None)
 
     report_path = config.report.output
     synth = ReportSynthesizer()
-    synth.write(result.report, path=report_path)
-
     log_path = _log_path(config)
+    run_log = synth.to_log(result.report, mode="assert")
+    md = synth.to_markdown(result.report)
+
+    if config.report.model:
+        from agent_lemon_lime.report.analyzer import analyze_report, insert_analysis
+
+        config_yaml = pathlib.Path(project_dir).resolve().joinpath("agent-lemon.yaml")
+        config_text = config_yaml.read_text() if config_yaml.exists() else ""
+        console.print("[dim]Running LLM analysis...[/dim]")
+        analysis = analyze_report(
+            result.report,
+            model=config.report.model,
+            config_yaml=config_text,
+            log_text=run_log,
+        )
+        if analysis:
+            md = insert_analysis(md, analysis)
+            console.print("[green]Analysis complete.[/green]")
+        else:
+            console.print("[yellow]Analysis skipped (see warnings above).[/yellow]")
+
+    p = pathlib.Path(report_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(md)
+
     synth.write_log(result.report, path=log_path, mode="assert")
 
     _print_failures(result.report.results, verbose=verbose)

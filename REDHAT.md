@@ -1,8 +1,5 @@
 # Red Hat — AI-assisted development (team reference)
 
-**Canonical policy**: [Guidelines for Responsible Use of AI Code Assistants](https://source.redhat.com/projects_and_programs/ai/wiki/code_assistants_guidelines_for_responsible_use_of_ai_code_assistants) (supplement to Red Hat's Policy on the Use of AI Technology).  
-If this file conflicts with the wiki, **the wiki wins**—update this file.
-
 ## Summary — seven guidelines
 
 1. **Human in the loop**: Treat AI output as suggestions; review, test, and modify before integrating.

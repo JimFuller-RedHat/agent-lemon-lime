@@ -1,9 +1,13 @@
-"""SystemCapabilityProfile — Pydantic model for NVIDIA OpenShell policy YAML."""
+"""SystemCapabilityProfile — Pydantic model for NVIDIA OpenShell policy YAML.
+
+Field names and types are derived from the canonical Rust source at
+crates/openshell-policy/src/lib.rs in the OpenShell repository.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal, Union
 
 import yaml
 from pydantic import BaseModel, Field
@@ -24,19 +28,48 @@ class ProcessPolicy(BaseModel):
     run_as_group: str = "sandbox"
 
 
+class QueryAnyDef(BaseModel):
+    any: list[str]
+
+
+# Untagged union: either a plain glob string or {any: [...]}
+QueryMatcherDef = Annotated[Union[str, QueryAnyDef], Field(union_mode="left_to_right")]
+
+
+class L7AllowDef(BaseModel):
+    method: str = "*"
+    path: str = "/*"
+    command: str = ""
+    query: dict[str, QueryMatcherDef] = Field(default_factory=dict)
+
+
+class L7RuleDef(BaseModel):
+    allow: L7AllowDef
+
+
+class NetworkBinaryDef(BaseModel):
+    path: str
+    harness: bool = False  # deprecated, kept for backward compatibility
+
+
 class NetworkEndpoint(BaseModel):
     host: str = Field(..., min_length=1)
     port: int = Field(443, ge=1, le=65535)
-    protocol: Literal["rest", "grpc"] = "rest"
-    tls: Literal["terminate", "passthrough"] = "terminate"
+    ports: list[int] = Field(default_factory=list)
+    # "rest" enables HTTP inspection with TLS termination; omit (empty string)
+    # for TCP passthrough without payload inspection.
+    protocol: str = ""
+    tls: str = ""
     enforcement: Literal["enforce", "audit"] = "enforce"
-    access: Literal["read-only", "read-write", "full"] = "read-only"
+    access: str = "full"
+    rules: list[L7RuleDef] = Field(default_factory=list)
+    allowed_ips: list[str] = Field(default_factory=list)
 
 
 class NetworkPolicy(BaseModel):
     name: str
     endpoints: list[NetworkEndpoint]
-    binaries: list[dict[str, str]] = Field(default_factory=list)
+    binaries: list[NetworkBinaryDef] = Field(default_factory=list)
 
 
 class SystemCapabilityProfile(BaseModel):
@@ -70,12 +103,16 @@ class SystemCapabilityProfile(BaseModel):
         """
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(
-            yaml.dump(self.model_dump(), default_flow_style=False, sort_keys=False)
+            yaml.dump(
+                self.model_dump(exclude_none=True, exclude_defaults=True),
+                default_flow_style=False,
+                sort_keys=False,
+            )
         )
 
     @classmethod
     def permissive(cls) -> SystemCapabilityProfile:
-        """Return a discovery-mode profile with audit-only enforcement."""
+        """Return a profile with audit-only enforcement (no blocking)."""
         return cls(
             filesystem_policy=FilesystemPolicy(
                 include_workdir=True,
@@ -83,10 +120,56 @@ class SystemCapabilityProfile(BaseModel):
                 read_write=["/tmp", "/sandbox"],
             ),
             network_policies={
+                "pypi": NetworkPolicy(
+                    name="PyPI package index",
+                    endpoints=[
+                        NetworkEndpoint(host="pypi.org", enforcement="audit"),
+                        NetworkEndpoint(host="*.pypi.org", enforcement="audit"),
+                        NetworkEndpoint(host="files.pythonhosted.org", enforcement="audit"),
+                    ],
+                ),
                 "all_audit": NetworkPolicy(
                     name="Audit all outbound",
-                    endpoints=[NetworkEndpoint(host="*", enforcement="audit")],
-                )
+                    endpoints=[NetworkEndpoint(host="*.*", enforcement="audit")],
+                ),
+            },
+        )
+
+    @classmethod
+    def discovery(cls) -> SystemCapabilityProfile:
+        """Return a restrictive policy for discovery mode.
+
+        Only allows the inference proxy and DNS. All other outbound
+        traffic is denied, causing OpenShell to generate draft policy
+        chunks for every connection the agent attempts.
+        """
+        return cls(
+            filesystem_policy=FilesystemPolicy(
+                include_workdir=True,
+                read_only=["/usr", "/lib", "/etc", "/proc"],
+                read_write=["/tmp", "/sandbox"],
+            ),
+            network_policies={
+                "inference-proxy": NetworkPolicy(
+                    name="Inference proxy",
+                    endpoints=[
+                        NetworkEndpoint(
+                            host="inference.local",
+                            port=443,
+                            enforcement="enforce",
+                        ),
+                    ],
+                ),
+                "dns": NetworkPolicy(
+                    name="DNS resolution",
+                    endpoints=[
+                        NetworkEndpoint(
+                            host="*.*",
+                            port=53,
+                            enforcement="enforce",
+                        ),
+                    ],
+                ),
             },
         )
 

@@ -3,17 +3,30 @@ version: "0.1.0"
 description: "Hello World example agent for testing agent-lemon-lime"
 
 run:
-  command: "python examples/hello_world/agent.py"
+  command: "python agent.py"
+  setup: "uv pip install ."
   timeout_seconds: 60
+  env:
+    AGENT_MODEL: "anthropic:claude-opus-4-6"
 
 evals:
   directories:
-    - examples/hello_world/evals
+    - .agent-lemon/evals/
+#  backends:
+#    - type: inspect
+#      model: anthropic/claude-opus-4-6
+#      tasks:
+#        - inspect_evals/agentharm
+#      score_threshold: 0.8
 
 scp:
   output: ".agent-lemon/hello-world-scp.yaml"
-  assert_file: null
+  assert_file: ".agent-lemon/hello-world-assert.yaml"
+
+sandbox:
+  type: openshell
 
 report:
   output: ".agent-lemon/hello-world-report.md"
   format: markdown
+  model: anthropic/claude-sonnet-4-20250514

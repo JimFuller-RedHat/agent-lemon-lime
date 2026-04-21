@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
@@ -24,6 +25,7 @@ class EvalCase:
     evaluators: list[Evaluator]
     domain: EvalDomain = EvalDomain.CORRECTNESS
     description: str = ""
+    judge_hint: str = ""
 
 
 @dataclass
@@ -33,12 +35,19 @@ class EvalResult:
     domain: EvalDomain
     output: EvalOutput
     failures: list[str] = field(default_factory=list)
+    command: list[str] = field(default_factory=list)
 
 
 class EvalRunner:
     """Executes eval cases against a sandbox, returns results."""
 
-    def run(self, cases: list[EvalCase], *, sandbox: AbstractSandbox) -> list[EvalResult]:
+    def run(
+        self,
+        cases: list[EvalCase],
+        *,
+        sandbox: AbstractSandbox,
+        on_result: Callable[[EvalResult], None] | None = None,
+    ) -> list[EvalResult]:
         results: list[EvalResult] = []
         with sandbox:
             for case in cases:
@@ -55,13 +64,15 @@ class EvalRunner:
                     domain=case.domain,
                 )
                 failures = [type(ev).__name__ for ev in case.evaluators if not ev.evaluate(output)]
-                results.append(
-                    EvalResult(
-                        name=case.name,
-                        passed=len(failures) == 0,
-                        domain=case.domain,
-                        output=output,
-                        failures=failures,
-                    )
+                result = EvalResult(
+                    name=case.name,
+                    passed=len(failures) == 0,
+                    domain=case.domain,
+                    output=output,
+                    failures=failures,
+                    command=list(case.input.command),
                 )
+                results.append(result)
+                if on_result is not None:
+                    on_result(result)
         return results

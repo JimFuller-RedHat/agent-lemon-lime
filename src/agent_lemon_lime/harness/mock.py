@@ -22,6 +22,7 @@ class MockSandbox:
         self._registry: dict[tuple[str, ...], _Registration] = {}
         self._calls: dict[tuple[str, ...], int] = defaultdict(int)
         self._active = False
+        self._enter_depth = 0
 
     def register_command(
         self,
@@ -43,10 +44,14 @@ class MockSandbox:
         return self._active
 
     def __enter__(self) -> MockSandbox:
+        self._enter_depth += 1
         self._active = True
         return self
 
     def __exit__(self, *args: object) -> None:
+        self._enter_depth -= 1
+        if self._enter_depth > 0:
+            return
         self._active = False
 
     def exec(

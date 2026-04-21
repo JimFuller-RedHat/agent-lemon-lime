@@ -57,6 +57,7 @@ class ReportConfig(BaseModel):
     output: str = ".agent-lemon/report.md"
     log: str | None = None  # defaults to .agent-lemon/{agent-name}.log
     format: Literal["markdown", "json"] = "markdown"
+    model: str | None = None
 
 
 class SandboxConfig(BaseModel):
