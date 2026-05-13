@@ -382,8 +382,6 @@ knowledge_base:
       - "**/CLAUDE.md"
       - "**/CONTRIBUTING.md"
 
-  learnings:
-    scope: "auto"
   issues:
     scope: "auto"
   pull_requests:
