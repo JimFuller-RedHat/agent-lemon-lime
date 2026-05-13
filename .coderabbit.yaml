@@ -316,19 +316,18 @@ reviews:
       enabled: true
     trivy:
       enabled: true
-    osv_scanner:
+    osvScanner:
       enabled: true
     actionlint:
       enabled: true
     ast-grep:
-      enabled: true
       essential_rules: true
 
   # ── Pre-merge checks (hard gates) ───────────────────────────
   pre_merge_checks:
-    pr_description:
+    description:
       mode: "warning"
-    custom:
+    custom_checks:
       - name: "no-hardcoded-secrets"
         instructions: |
           Flag hardcoded secrets: API keys, tokens, passwords, private
@@ -383,7 +382,8 @@ knowledge_base:
       - "**/CLAUDE.md"
       - "**/CONTRIBUTING.md"
 
-  learnings: "auto"
+  learnings:
+    scope: "auto"
   issues:
     scope: "auto"
   pull_requests:
