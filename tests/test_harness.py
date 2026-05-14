@@ -135,9 +135,7 @@ def test_openshell_sandbox_upload_failure_raises():
 
     sandbox = OpenshellSandbox(_client=mock_client, workdir="/tmp/project")
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(
-            returncode=1, stdout="", stderr="upload failed"
-        )
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="upload failed")
         with pytest.raises(RuntimeError, match="Failed to upload workdir"):
             sandbox.__enter__()
 
@@ -183,9 +181,7 @@ def test_openshell_sandbox_setup_failure_raises():
     """OpenshellSandbox raises RuntimeError when setup command fails."""
     mock_session = MagicMock()
     mock_session.sandbox.name = "sbx-fail"
-    mock_session.exec.return_value = MagicMock(
-        exit_code=1, stdout="", stderr="pip error"
-    )
+    mock_session.exec.return_value = MagicMock(exit_code=1, stdout="", stderr="pip error")
     mock_client = MagicMock()
     mock_client.create_session.return_value = mock_session
 
@@ -224,7 +220,9 @@ def test_openshell_sandbox_caches_draft_policy_on_exit():
 
     sandbox = OpenshellSandbox(_client=mock_client)
     with patch.object(
-        sandbox, "_fetch_draft_policy", return_value=[fake_chunk],
+        sandbox,
+        "_fetch_draft_policy",
+        return_value=[fake_chunk],
     ):
         with sandbox:
             pass

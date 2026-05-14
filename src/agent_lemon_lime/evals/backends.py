@@ -182,26 +182,26 @@ def run_backends(
             continue
         if not backend.available():
             for task in config.tasks:
-                results.append(EvalResult(
-                    name=f"{backend.name}::{task}",
-                    passed=False,
-                    domain=EvalDomain.BEHAVIORAL,
-                    output=EvalOutput(
-                        exit_code=1,
-                        stdout=f"Backend '{backend.name}' is not installed. "
-                               f"Install it with: pip install inspect-ai",
-                        stderr="",
+                results.append(
+                    EvalResult(
+                        name=f"{backend.name}::{task}",
+                        passed=False,
                         domain=EvalDomain.BEHAVIORAL,
-                    ),
-                    failures=[f"Backend '{backend.name}' not installed"],
-                ))
+                        output=EvalOutput(
+                            exit_code=1,
+                            stdout=f"Backend '{backend.name}' is not installed. "
+                            f"Install it with: pip install inspect-ai",
+                            stderr="",
+                            domain=EvalDomain.BEHAVIORAL,
+                        ),
+                        failures=[f"Backend '{backend.name}' not installed"],
+                    )
+                )
             continue
         backend_results = backend.run(
             tasks=config.tasks,
             model=config.model,
             score_threshold=config.score_threshold,
         )
-        results.extend(
-            _backend_result_to_eval_result(br) for br in backend_results
-        )
+        results.extend(_backend_result_to_eval_result(br) for br in backend_results)
     return results

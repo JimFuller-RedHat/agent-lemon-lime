@@ -167,10 +167,16 @@ def test_create_sandbox_openshell():
 
     responses = {
         ("openshell", "status"): subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="Running", stderr="",
+            args=[],
+            returncode=0,
+            stdout="Running",
+            stderr="",
         ),
         ("openshell", "provider", "list"): subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="anthropic\n", stderr="",
+            args=[],
+            returncode=0,
+            stdout="anthropic\n",
+            stderr="",
         ),
     }
     config = SandboxConfig(type="openshell")
@@ -229,7 +235,10 @@ def test_configure_inference_failure_exits():
     cmd = ("openshell", "inference", "set", "--provider", "bad", "--model", model)
     responses = {
         cmd: subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="", stderr="unknown provider",
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="unknown provider",
         ),
     }
     with patch("subprocess.run", side_effect=_mock_run(responses)), pytest.raises(typer.Exit):
@@ -244,8 +253,11 @@ def test_resolve_sandbox_config_provider_flag():
 
     config = _make_config("openshell")
     resolved = _resolve_sandbox_config(
-        config, sandbox_flag=None, no_auto_start=False,
-        provider_flag="anthropic", model_flag=None,
+        config,
+        sandbox_flag=None,
+        no_auto_start=False,
+        provider_flag="anthropic",
+        model_flag=None,
     )
     assert resolved.provider == "anthropic"
     assert resolved.model is None
@@ -256,8 +268,11 @@ def test_resolve_sandbox_config_model_flag():
 
     config = _make_config("openshell")
     resolved = _resolve_sandbox_config(
-        config, sandbox_flag=None, no_auto_start=False,
-        provider_flag=None, model_flag="claude-sonnet-4-20250514",
+        config,
+        sandbox_flag=None,
+        no_auto_start=False,
+        provider_flag=None,
+        model_flag="claude-sonnet-4-20250514",
     )
     assert resolved.model == "claude-sonnet-4-20250514"
     assert resolved.provider is None
@@ -277,8 +292,11 @@ def test_resolve_sandbox_config_flags_override_yaml():
     """)
     config = LemonConfig.from_yaml(yaml_text)
     resolved = _resolve_sandbox_config(
-        config, sandbox_flag=None, no_auto_start=False,
-        provider_flag="new-provider", model_flag="new-model",
+        config,
+        sandbox_flag=None,
+        no_auto_start=False,
+        provider_flag="new-provider",
+        model_flag="new-model",
     )
     assert resolved.provider == "new-provider"
     assert resolved.model == "new-model"
@@ -316,7 +334,9 @@ def test_resolve_sandbox_config_discovery_policy_flag():
 
     config = _make_config("openshell")
     resolved = _resolve_sandbox_config(
-        config, sandbox_flag=None, no_auto_start=False,
+        config,
+        sandbox_flag=None,
+        no_auto_start=False,
         discovery_policy_flag="/tmp/custom-policy.yaml",
     )
     assert resolved.discovery_policy == "/tmp/custom-policy.yaml"
@@ -348,7 +368,9 @@ def test_resolve_sandbox_config_ready_timeout_flag():
 
     config = _make_config("openshell")
     resolved = _resolve_sandbox_config(
-        config, sandbox_flag=None, no_auto_start=False,
+        config,
+        sandbox_flag=None,
+        no_auto_start=False,
         ready_timeout_flag=300.0,
     )
     assert resolved.ready_timeout_seconds == 300.0
@@ -359,6 +381,8 @@ def test_resolve_sandbox_config_ready_timeout_default():
 
     config = _make_config("openshell")
     resolved = _resolve_sandbox_config(
-        config, sandbox_flag=None, no_auto_start=False,
+        config,
+        sandbox_flag=None,
+        no_auto_start=False,
     )
     assert resolved.ready_timeout_seconds == 120.0

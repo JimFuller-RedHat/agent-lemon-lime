@@ -10,14 +10,10 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 import yaml
+from agent_eval.config import JudgeConfig
 
 from agent_lemon_lime.evals.runner import EvalCase, EvalInput
-from agent_lemon_lime.evals.standard import (
-    EvalDomain,
-    Evaluator,
-    ExitCodeEvaluator,
-    OutputContainsEvaluator,
-)
+from agent_lemon_lime.evals.standard import EvalDomain
 
 if TYPE_CHECKING:
     from agent_lemon_lime.config import LemonConfig
@@ -27,6 +23,11 @@ from agent_lemon_lime.config import resolve_env
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_EXIT_CHECK = JudgeConfig(
+    name="exit-code",
+    check='return outputs.get("exit_code", 1) == 0, "non-zero exit"',
+)
+
 
 def load_cases_from_dir(
     directory: pathlib.Path | str,
@@ -35,14 +36,7 @@ def load_cases_from_dir(
     run_command: list[str] | None = None,
     run_env: dict[str, str] | None = None,
 ) -> list[EvalCase]:
-    """Return EvalCase objects from all *.yaml files in directory.
-
-    When run_command is provided, prompt-only cases are auto-converted by
-    appending --prompt <prompt> to the run_command. Without run_command,
-    prompt-only cases emit a warning and are skipped.
-
-    Returns an empty list if the directory does not exist.
-    """
+    """Return EvalCase objects from all *.yaml files in directory."""
     d = pathlib.Path(directory)
     if base_dir is not None:
         d = base_dir / d
@@ -62,7 +56,10 @@ def load_cases_from_config(config: LemonConfig, *, project_dir: pathlib.Path) ->
     for directory in config.evals.directories:
         cases.extend(
             load_cases_from_dir(
-                directory, base_dir=project_dir, run_command=run_command, run_env=resolved,
+                directory,
+                base_dir=project_dir,
+                run_command=run_command,
+                run_env=resolved,
             )
         )
     return cases
@@ -73,11 +70,7 @@ def load_cases_from_sandbox(
     *,
     sandbox: AbstractSandbox,
 ) -> list[EvalCase]:
-    """Load eval cases by reading YAML files from inside the sandbox.
-
-    Used in image-only mode where eval directories exist inside the
-    container image rather than on the local filesystem.
-    """
+    """Load eval cases by reading YAML files from inside the sandbox."""
     run_command = shlex.split(config.run.command)
     resolved = resolve_env(config.run.env) if config.run.env else {}
     cases: list[EvalCase] = []
@@ -88,7 +81,8 @@ def load_cases_from_sandbox(
         if listing.exit_code != 0:
             logger.warning(
                 "Failed to list eval dir %s in sandbox: %s",
-                directory, listing.stderr.strip(),
+                directory,
+                listing.stderr.strip(),
             )
             continue
         for yaml_path in sorted(listing.stdout.strip().splitlines()):
@@ -98,7 +92,8 @@ def load_cases_from_sandbox(
             if result.exit_code != 0:
                 logger.warning(
                     "Failed to read %s from sandbox: %s",
-                    yaml_path, result.stderr.strip(),
+                    yaml_path,
+                    result.stderr.strip(),
                 )
                 continue
             cases.extend(
@@ -117,8 +112,12 @@ def default_case_from_config(config: LemonConfig) -> EvalCase:
     resolved = resolve_env(config.run.env) if config.run.env else {}
     return EvalCase(
         name=f"{config.name}-runs",
-        input=EvalInput(command=command, timeout_seconds=config.run.timeout_seconds, env=resolved),
-        evaluators=[ExitCodeEvaluator()],
+        input=EvalInput(
+            command=command,
+            timeout_seconds=config.run.timeout_seconds,
+            env=resolved,
+        ),
+        judges=[DEFAULT_EXIT_CHECK],
         domain=EvalDomain.CORRECTNESS,
         description=f"Smoke test: {config.run.command} exits 0",
     )
@@ -133,8 +132,6 @@ def load_builtin_probes(
     config_yaml: str = "",
 ) -> list[EvalCase]:
     """Load built-in probe cases from the agent_lemon_lime.probes package."""
-    from agent_lemon_lime.evals.standard import LLMJudgeEvaluator
-
     probes_pkg = importlib.resources.files("agent_lemon_lime.probes")
     cases: list[EvalCase] = []
     for resource in sorted(probes_pkg.iterdir(), key=lambda r: r.name):
@@ -143,18 +140,6 @@ def load_builtin_probes(
         text = resource.read_text(encoding="utf-8")
         parsed = _parse_case_content(text, run_command=run_command, run_env=run_env)
         cases.extend(parsed)
-
-    if model:
-        for case in cases:
-            if case.judge_hint:
-                case.evaluators.append(
-                    LLMJudgeEvaluator(
-                        judge_hint=case.judge_hint,
-                        scp_yaml=scp_yaml,
-                        config_yaml=config_yaml,
-                        model=model,
-                    )
-                )
     return cases
 
 
@@ -164,7 +149,9 @@ def _parse_case_file(
     run_env: dict[str, str] | None = None,
 ) -> list[EvalCase]:
     return _parse_case_content(
-        path.read_text(), run_command=run_command, run_env=run_env,
+        path.read_text(),
+        run_command=run_command,
+        run_env=run_env,
     )
 
 
@@ -190,13 +177,17 @@ def _parse_case(
 ) -> EvalCase | None:
     name = raw.get("name", "unnamed")
     description = raw.get("description", "")
-    judge_hint = raw.get("judge_hint", "")
     domain_str = raw.get("domain", "correctness")
     try:
         domain = EvalDomain(domain_str)
     except ValueError:
-        logger.warning("Unknown domain '%s' for case '%s' — using CORRECTNESS", domain_str, name)
+        logger.warning(
+            "Unknown domain '%s' for case '%s' — using CORRECTNESS",
+            domain_str,
+            name,
+        )
         domain = EvalDomain.CORRECTNESS
+
     inp = raw.get("input", {})
     command = inp.get("command")
     if command is None:
@@ -210,16 +201,52 @@ def _parse_case(
                 stacklevel=3,
             )
             return None
-    evaluators: list[Evaluator] = [ExitCodeEvaluator()]
+
+    judges: list[JudgeConfig] = []
+
+    raw_judges = raw.get("judges", [])
+    for rj in raw_judges:
+        judges.append(
+            JudgeConfig(
+                name=rj.get("name", ""),
+                description=rj.get("description", ""),
+                condition=rj.get("if", ""),
+                check=rj.get("check", ""),
+                prompt=rj.get("prompt", ""),
+                prompt_file=rj.get("prompt_file", ""),
+                context=rj.get("context", []),
+                feedback_type=rj.get("feedback_type", ""),
+                model=rj.get("model", ""),
+                module=rj.get("module", ""),
+                function=rj.get("function", ""),
+            )
+        )
+
+    if not raw_judges:
+        judges.append(DEFAULT_EXIT_CHECK)
+
     expected = raw.get("expected_output")
     if expected:
-        evaluators.append(OutputContainsEvaluator(expected=str(expected)))
+        escaped = str(expected).replace('"', '\\"')
+        judges.append(
+            JudgeConfig(
+                name="output-contains",
+                check=(
+                    f'return "{escaped}" in outputs.get("stdout", ""), '
+                    f'"expected \\"{escaped}\\" not found in stdout"'
+                ),
+            )
+        )
+
+    judge_hint = raw.get("judge_hint", "")
+    if judge_hint:
+        judges.append(JudgeConfig(name="behavioral", prompt=judge_hint))
+
     env = dict(run_env) if run_env else {}
     return EvalCase(
         name=name,
         input=EvalInput(command=list(command), env=env),
-        evaluators=evaluators,
+        judges=judges,
         domain=domain,
         description=description,
-        judge_hint=judge_hint,
     )

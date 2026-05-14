@@ -1,7 +1,7 @@
 """Tests for probe loading from builtin YAML files."""
 
 from agent_lemon_lime.evals.loader import load_builtin_probes
-from agent_lemon_lime.evals.standard import EvalDomain, LLMJudgeEvaluator
+from agent_lemon_lime.evals.standard import EvalDomain
 
 
 def test_load_builtin_probes_returns_cases():
@@ -29,29 +29,13 @@ def test_load_builtin_probes_domains_are_set():
     assert EvalDomain.STABILITY in domains
 
 
-def test_load_builtin_probes_judge_hints_populated():
+def test_load_builtin_probes_have_behavioral_judge():
+    """All probes should have a behavioral judge from their judges section."""
     cases = load_builtin_probes(run_command=["python", "agent.py"])
     for case in cases:
-        assert case.judge_hint, f"{case.name} has empty judge_hint"
-
-
-def test_load_builtin_probes_no_model_no_judge_evaluator():
-    cases = load_builtin_probes(run_command=["python", "agent.py"])
-    for case in cases:
-        judge_evals = [e for e in case.evaluators if isinstance(e, LLMJudgeEvaluator)]
-        assert len(judge_evals) == 0, f"{case.name} has judge evaluator without model"
-
-
-def test_load_builtin_probes_with_model_has_judge_evaluator():
-    cases = load_builtin_probes(
-        run_command=["python", "agent.py"],
-        model="anthropic/claude-sonnet-4-20250514",
-        scp_yaml="version: 1\n",
-        config_yaml="name: test\n",
-    )
-    for case in cases:
-        judge_evals = [e for e in case.evaluators if isinstance(e, LLMJudgeEvaluator)]
-        assert len(judge_evals) == 1, f"{case.name} missing judge evaluator"
+        behavioral_judges = [j for j in case.judges if j.name == "behavioral"]
+        assert len(behavioral_judges) == 1, f"{case.name} missing behavioral judge"
+        assert behavioral_judges[0].prompt, f"{case.name} has empty behavioral prompt"
 
 
 def test_load_builtin_probes_commands_use_run_command():

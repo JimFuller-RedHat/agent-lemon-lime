@@ -5,6 +5,7 @@ import pathlib
 import pytest
 
 from agent_lemon_lime.evals.runner import EvalResult
+from agent_lemon_lime.evals.scoring import JudgeScore
 from agent_lemon_lime.evals.standard import EvalDomain, EvalOutput
 from agent_lemon_lime.report.synthesizer import ReportSynthesizer
 from agent_lemon_lime.scp.models import SystemCapabilityProfile
@@ -21,12 +22,32 @@ def _make_result(name: str, passed: bool) -> EvalResult:
             stderr="",
             domain=EvalDomain.CORRECTNESS,
         ),
-        failures=[] if passed else ["ExitCodeEvaluator"],
+        failures=[] if passed else ["exit-code: non-zero exit"],
+    )
+
+
+def _make_result_with_scores(name: str, passed: bool, scores: dict) -> EvalResult:
+    return EvalResult(
+        name=name,
+        passed=passed,
+        domain=EvalDomain.CORRECTNESS,
+        output=EvalOutput(
+            exit_code=0 if passed else 1,
+            stdout="",
+            stderr="",
+            domain=EvalDomain.CORRECTNESS,
+        ),
+        failures=[] if passed else ["exit-code: non-zero exit"],
+        scores={k: JudgeScore(**v) for k, v in scores.items()},
     )
 
 
 def test_report_summary_counts():
-    results = [_make_result("a", True), _make_result("b", True), _make_result("c", False)]
+    results = [
+        _make_result("a", True),
+        _make_result("b", True),
+        _make_result("c", False),
+    ]
     synth = ReportSynthesizer()
     report = synth.build(results, scp=SystemCapabilityProfile.permissive())
     assert report.summary.total == 3
@@ -43,9 +64,16 @@ def test_report_summary_zero_total():
 
 
 def test_report_markdown_has_key_sections():
-    results = [_make_result("test-one", True), _make_result("test-two", False)]
+    results = [
+        _make_result("test-one", True),
+        _make_result("test-two", False),
+    ]
     synth = ReportSynthesizer()
-    report = synth.build(results, scp=SystemCapabilityProfile(), violations=["bad tool"])
+    report = synth.build(
+        results,
+        scp=SystemCapabilityProfile(),
+        violations=["bad tool"],
+    )
     md = synth.to_markdown(report)
     assert "# Agent Lemon Report" in md
     assert "Pass Rate" in md
@@ -72,3 +100,31 @@ def test_report_write_to_file(tmp_path: pathlib.Path):
     synth.write(report, path=out)
     content = out.read_text()
     assert "# Agent Lemon Report" in content
+
+
+def test_report_has_judge_summary():
+    results = [
+        _make_result_with_scores("a", True, {"exit-code": {"value": True}}),
+        _make_result_with_scores("b", True, {"exit-code": {"value": True}}),
+    ]
+    synth = ReportSynthesizer()
+    report = synth.build(results, scp=SystemCapabilityProfile.permissive())
+    assert "exit-code" in report.judge_summary
+    assert report.judge_summary["exit-code"]["pass_rate"] == 1.0
+
+
+def test_report_regressions_default_empty():
+    results = [_make_result("clean", True)]
+    synth = ReportSynthesizer()
+    report = synth.build(results, scp=SystemCapabilityProfile())
+    assert report.regressions == []
+
+
+def test_report_markdown_has_judge_scores_section():
+    results = [
+        _make_result_with_scores("a", True, {"exit-code": {"value": True}}),
+    ]
+    synth = ReportSynthesizer()
+    report = synth.build(results, scp=SystemCapabilityProfile())
+    md = synth.to_markdown(report)
+    assert "Judge Scores" in md

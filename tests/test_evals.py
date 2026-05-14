@@ -1,56 +1,24 @@
-"""Tests for standard evaluators and EvalRunner."""
+"""Tests for EvalRunner and case loading."""
 
 import warnings
 
 import pytest
+from agent_eval.config import JudgeConfig
 
 from agent_lemon_lime.evals.loader import load_cases_from_dir
 from agent_lemon_lime.evals.runner import EvalCase, EvalInput, EvalRunner
 from agent_lemon_lime.evals.skills import SkillLoader
-from agent_lemon_lime.evals.standard import (
-    EvalDomain,
-    EvalOutput,
-    ExitCodeEvaluator,
-    NoErrorOutputEvaluator,
-    OutputContainsEvaluator,
-)
 from agent_lemon_lime.harness.mock import MockSandbox
 
+EXIT_CHECK = JudgeConfig(
+    name="exit-code",
+    check='return outputs.get("exit_code", 1) == 0, "non-zero exit"',
+)
 
-def test_exit_code_evaluator_pass():
-    ev = ExitCodeEvaluator()
-    out = EvalOutput(exit_code=0, stdout="ok", stderr="", domain=EvalDomain.CORRECTNESS)
-    assert ev.evaluate(out) is True
-
-
-def test_exit_code_evaluator_fail():
-    ev = ExitCodeEvaluator()
-    out = EvalOutput(exit_code=1, stdout="", stderr="error", domain=EvalDomain.STABILITY)
-    assert ev.evaluate(out) is False
-
-
-def test_no_error_output_evaluator_clean():
-    ev = NoErrorOutputEvaluator()
-    out = EvalOutput(exit_code=0, stdout="ok", stderr="", domain=EvalDomain.SAFETY)
-    assert ev.evaluate(out) is True
-
-
-def test_no_error_output_evaluator_noisy():
-    ev = NoErrorOutputEvaluator()
-    out = EvalOutput(exit_code=0, stdout="ok", stderr="WARN: something", domain=EvalDomain.SAFETY)
-    assert ev.evaluate(out) is False
-
-
-def test_output_contains_evaluator_match():
-    ev = OutputContainsEvaluator(expected="hello world")
-    out = EvalOutput(exit_code=0, stdout="hello world!", stderr="", domain=EvalDomain.CORRECTNESS)
-    assert ev.evaluate(out) is True
-
-
-def test_output_contains_evaluator_no_match():
-    ev = OutputContainsEvaluator(expected="hello world")
-    out = EvalOutput(exit_code=0, stdout="goodbye", stderr="", domain=EvalDomain.CORRECTNESS)
-    assert ev.evaluate(out) is False
+CONTAINS_HELLO = JudgeConfig(
+    name="output-contains",
+    check='return "hello" in outputs.get("stdout", ""), "missing hello"',
+)
 
 
 def test_eval_runner_passes():
@@ -61,7 +29,7 @@ def test_eval_runner_passes():
         EvalCase(
             name="echo-passes",
             input=EvalInput(command=["echo", "hello"]),
-            evaluators=[ExitCodeEvaluator(), OutputContainsEvaluator(expected="hello")],
+            judges=[EXIT_CHECK, CONTAINS_HELLO],
         )
     ]
     results = runner.run(cases, sandbox=sandbox)
@@ -69,6 +37,8 @@ def test_eval_runner_passes():
     assert results[0].passed is True
     assert results[0].name == "echo-passes"
     assert results[0].failures == []
+    assert "exit-code" in results[0].scores
+    assert results[0].scores["exit-code"].value is True
 
 
 def test_eval_runner_fails():
@@ -79,12 +49,13 @@ def test_eval_runner_fails():
         EvalCase(
             name="fails",
             input=EvalInput(command=["bad", "cmd"]),
-            evaluators=[ExitCodeEvaluator()],
+            judges=[EXIT_CHECK],
         )
     ]
     results = runner.run(cases, sandbox=sandbox)
     assert results[0].passed is False
-    assert "ExitCodeEvaluator" in results[0].failures
+    assert any("exit-code" in f for f in results[0].failures)
+    assert results[0].scores["exit-code"].value is False
 
 
 def test_eval_runner_multiple_cases():
@@ -93,8 +64,16 @@ def test_eval_runner_multiple_cases():
     sandbox.register_command(["fail"], stdout="", exit_code=1)
     runner = EvalRunner()
     cases = [
-        EvalCase(name="pass", input=EvalInput(command=["ok"]), evaluators=[ExitCodeEvaluator()]),
-        EvalCase(name="fail", input=EvalInput(command=["fail"]), evaluators=[ExitCodeEvaluator()]),
+        EvalCase(
+            name="pass",
+            input=EvalInput(command=["ok"]),
+            judges=[EXIT_CHECK],
+        ),
+        EvalCase(
+            name="fail",
+            input=EvalInput(command=["fail"]),
+            judges=[EXIT_CHECK],
+        ),
     ]
     results = runner.run(cases, sandbox=sandbox)
     assert results[0].passed is True
@@ -146,32 +125,30 @@ def test_loader_converts_prompt_case_when_run_command_provided(tmp_path):
     cases = load_cases_from_dir(tmp_path, run_command=["python", "agent.py"])
     assert len(cases) == 1
     assert cases[0].name == "greeting-responds"
-    assert cases[0].input.command == ["python", "agent.py", "--prompt", "Say hello."]
+    assert cases[0].input.command == [
+        "python",
+        "agent.py",
+        "--prompt",
+        "Say hello.",
+    ]
 
 
 def test_loader_warns_and_skips_prompt_case_without_run_command(tmp_path):
     (tmp_path / "cases.yaml").write_text(
-        "cases:\n"
-        "  - name: prompt-only\n"
-        "    input:\n"
-        "      prompt: 'Say hello.'\n"
+        "cases:\n  - name: prompt-only\n    input:\n      prompt: 'Say hello.'\n"
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         cases = load_cases_from_dir(tmp_path)
     assert cases == []
     assert any(
-        issubclass(w.category, UserWarning) and "prompt-only" in w.message.args[0]
-        for w in caught
+        issubclass(w.category, UserWarning) and "prompt-only" in w.message.args[0] for w in caught
     )
 
 
 def test_loader_command_case_unaffected_by_run_command(tmp_path):
     (tmp_path / "cases.yaml").write_text(
-        "cases:\n"
-        "  - name: exits-cleanly\n"
-        "    input:\n"
-        "      command: ['python', 'agent.py']\n"
+        "cases:\n  - name: exits-cleanly\n    input:\n      command: ['python', 'agent.py']\n"
     )
     cases = load_cases_from_dir(tmp_path, run_command=["python", "agent.py"])
     assert len(cases) == 1
@@ -185,14 +162,16 @@ def test_load_cases_from_sandbox():
     from agent_lemon_lime.config import LemonConfig
     from agent_lemon_lime.evals.loader import load_cases_from_sandbox
 
-    config = LemonConfig.from_yaml(textwrap.dedent("""\
+    config = LemonConfig.from_yaml(
+        textwrap.dedent("""\
         name: test-agent
         run:
           command: python agent.py
         evals:
           directories:
             - evals/
-    """))
+    """)
+    )
 
     yaml_content = textwrap.dedent("""\
         cases:
@@ -227,14 +206,16 @@ def test_load_cases_from_sandbox_missing_dir():
     from agent_lemon_lime.config import LemonConfig
     from agent_lemon_lime.evals.loader import load_cases_from_sandbox
 
-    config = LemonConfig.from_yaml(textwrap.dedent("""\
+    config = LemonConfig.from_yaml(
+        textwrap.dedent("""\
         name: test-agent
         run:
           command: python agent.py
         evals:
           directories:
             - evals/
-    """))
+    """)
+    )
 
     sandbox = MockSandbox()
     sandbox.register_command(

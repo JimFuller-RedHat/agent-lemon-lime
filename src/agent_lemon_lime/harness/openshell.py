@@ -121,8 +121,7 @@ class OpenshellSandbox:
         raw = self._session.exec(["sh", "-c", self._setup_command])
         if raw.exit_code != 0:
             raise RuntimeError(
-                f"Sandbox setup command failed (exit {raw.exit_code}): "
-                f"{raw.stderr.strip()}"
+                f"Sandbox setup command failed (exit {raw.exit_code}): {raw.stderr.strip()}"
             )
 
     def _upload_workdir(self) -> None:
@@ -136,8 +135,7 @@ class OpenshellSandbox:
         )
         if result.returncode != 0:
             raise RuntimeError(
-                f"Failed to upload workdir to sandbox {sandbox_name}: "
-                f"{result.stderr.strip()}"
+                f"Failed to upload workdir to sandbox {sandbox_name}: {result.stderr.strip()}"
             )
 
     @property
@@ -157,7 +155,8 @@ class OpenshellSandbox:
                 name=self._session.sandbox.name,
             )
             response = self._client_instance._stub.GetDraftPolicy(
-                request, timeout=self._timeout,
+                request,
+                timeout=self._timeout,
             )
             return list(response.chunks)
         except Exception:

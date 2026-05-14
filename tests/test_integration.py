@@ -3,11 +3,12 @@
 import pathlib
 
 import pytest
+from agent_eval.config import JudgeConfig
 
 from agent_lemon_lime.agents.lemon import LemonAgent
 from agent_lemon_lime.config import LemonConfig
 from agent_lemon_lime.evals.runner import EvalCase, EvalInput
-from agent_lemon_lime.evals.standard import EvalDomain, ExitCodeEvaluator, OutputContainsEvaluator
+from agent_lemon_lime.evals.standard import EvalDomain
 from agent_lemon_lime.harness.mock import MockSandbox
 
 HELLO_WORLD_CONFIG = pathlib.Path(__file__).parent.parent / "examples/hello_world/agent-lemon.yaml"
@@ -25,10 +26,18 @@ def test_hello_world_discovery():
     cases = [
         EvalCase(
             name="hello-world-runs",
-            input=EvalInput(command=["python", "examples/hello_world/agent.py"]),
-            evaluators=[
-                ExitCodeEvaluator(),
-                OutputContainsEvaluator(expected="Hello"),
+            input=EvalInput(
+                command=["python", "examples/hello_world/agent.py"],
+            ),
+            judges=[
+                JudgeConfig(
+                    name="exit-code",
+                    check=('return outputs.get("exit_code", 1) == 0, "non-zero exit"'),
+                ),
+                JudgeConfig(
+                    name="output-contains",
+                    check=('return "Hello" in outputs.get("stdout", ""), "missing Hello"'),
+                ),
             ],
             domain=EvalDomain.CORRECTNESS,
         )

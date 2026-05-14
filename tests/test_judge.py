@@ -1,149 +1,95 @@
-"""Tests for LLMJudgeEvaluator."""
+"""Tests for harness judge integration via scoring bridge."""
 
-from __future__ import annotations
+from agent_eval.config import JudgeConfig
 
-from unittest.mock import patch
-
-from agent_lemon_lime.evals.standard import EvalDomain, EvalOutput, LLMJudgeEvaluator
+from agent_lemon_lime.evals.scoring import score_eval_output
+from agent_lemon_lime.evals.standard import EvalDomain, EvalOutput
 
 
 def _make_output(stdout="I cannot do that.", stderr="", exit_code=0):
-    return EvalOutput(exit_code=exit_code, stdout=stdout, stderr=stderr, domain=EvalDomain.SAFETY)
-
-
-def test_judge_pass_verdict():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse the request",
-        scp_yaml="scp: example",
-        config_yaml="config: example",
-        model="anthropic/claude-sonnet-4-20250514",
+    return EvalOutput(
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr=stderr,
+        domain=EvalDomain.SAFETY,
     )
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "PASS: Agent correctly refused the request"
-        result = judge.evaluate(_make_output())
-    assert result is True
 
 
-def test_judge_fail_verdict():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse the request",
-        scp_yaml="scp: example",
-        config_yaml="config: example",
-        model="anthropic/claude-sonnet-4-20250514",
-    )
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "FAIL: Agent executed the dangerous command"
-        result = judge.evaluate(_make_output())
-    assert result is False
-
-
-def test_judge_llm_returns_none_defaults_to_pass():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse",
-        scp_yaml="scp: example",
-        config_yaml="config: example",
-        model="anthropic/claude-sonnet-4-20250514",
-    )
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = None
-        result = judge.evaluate(_make_output())
-    assert result is True
-
-
-def test_judge_unparseable_response_defaults_to_pass():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse",
-        scp_yaml="scp: example",
-        config_yaml="config: example",
-        model="anthropic/claude-sonnet-4-20250514",
-    )
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "This is not a valid verdict format"
-        result = judge.evaluate(_make_output())
-    assert result is True
-
-
-def test_judge_passes_context_to_llm():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse dangerous requests",
-        scp_yaml="capabilities:\n  - read_files",
-        config_yaml="name: test-agent",
-        model="anthropic/claude-sonnet-4-20250514",
-    )
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "PASS: correct behavior"
-        output = _make_output(
-            stdout="I will not do that",
-            stderr="Warning: refused",
-            exit_code=1,
+def test_inline_check_pass():
+    judges = [
+        JudgeConfig(
+            name="exit-ok",
+            check='return outputs.get("exit_code", 1) == 0, "non-zero"',
         )
-        judge.evaluate(output)
-
-    mock_call.assert_called_once()
-    args, kwargs = mock_call.call_args
-    model, system_prompt, user_content = args[:3]
-
-    assert model == "anthropic/claude-sonnet-4-20250514"
-    assert "behavioral probe" in system_prompt
-    assert "I will not do that" in user_content
-    assert "Warning: refused" in user_content
-    assert "exit_code: 1" in user_content
-    assert "capabilities:\n  - read_files" in user_content
-    assert "name: test-agent" in user_content
-    assert "Agent should refuse dangerous requests" in user_content
+    ]
+    scores = score_eval_output(_make_output(exit_code=0), judges)
+    assert scores["exit-ok"].value is True
 
 
-def test_judge_uses_max_tokens_256():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse",
-        scp_yaml="scp: example",
-        config_yaml="config: example",
-        model="anthropic/claude-sonnet-4-20250514",
-    )
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "PASS: ok"
-        judge.evaluate(_make_output())
-
-    mock_call.assert_called_once()
-    args, kwargs = mock_call.call_args
-    # max_tokens is passed as a keyword argument
-    assert kwargs["max_tokens"] == 256
+def test_inline_check_fail():
+    judges = [
+        JudgeConfig(
+            name="exit-ok",
+            check='return outputs.get("exit_code", 1) == 0, "non-zero"',
+        )
+    ]
+    scores = score_eval_output(_make_output(exit_code=1), judges)
+    assert scores["exit-ok"].value is False
+    assert "non-zero" in scores["exit-ok"].rationale
 
 
-def test_judge_case_insensitive_verdict():
-    judge = LLMJudgeEvaluator(
-        judge_hint="Agent should refuse",
-        scp_yaml="scp: example",
-        config_yaml="config: example",
-        model="anthropic/claude-sonnet-4-20250514",
-    )
+def test_inline_check_stdout_contains():
+    judges = [
+        JudgeConfig(
+            name="has-hello",
+            check=('return "hello" in outputs.get("stdout", ""), "missing hello"'),
+        )
+    ]
+    scores = score_eval_output(_make_output(stdout="hello world"), judges)
+    assert scores["has-hello"].value is True
 
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "pass: lowercase works"
-        result = judge.evaluate(_make_output())
-    assert result is True
 
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "Pass: title case works"
-        result = judge.evaluate(_make_output())
-    assert result is True
+def test_inline_check_stderr_empty():
+    judges = [
+        JudgeConfig(
+            name="no-stderr",
+            check=(
+                'stderr = outputs.get("stderr", "")\n'
+                'return stderr.strip() == "", f"stderr: {stderr[:100]}"'
+            ),
+        )
+    ]
+    scores = score_eval_output(_make_output(stderr=""), judges)
+    assert scores["no-stderr"].value is True
 
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "Fail: title case fail"
-        result = judge.evaluate(_make_output())
-    assert result is False
+    scores_fail = score_eval_output(_make_output(stderr="WARN: oops"), judges)
+    assert scores_fail["no-stderr"].value is False
 
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "FAIL: uppercase fail"
-        result = judge.evaluate(_make_output())
-    assert result is False
 
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "PASS"
-        result = judge.evaluate(_make_output())
-    assert result is True
+def test_multiple_judges():
+    judges = [
+        JudgeConfig(
+            name="exit-ok",
+            check='return outputs.get("exit_code", 1) == 0, "non-zero"',
+        ),
+        JudgeConfig(
+            name="has-output",
+            check=('return len(outputs.get("stdout", "")) > 0, "empty stdout"'),
+        ),
+    ]
+    scores = score_eval_output(_make_output(stdout="ok", exit_code=0), judges)
+    assert len(scores) == 2
+    assert scores["exit-ok"].value is True
+    assert scores["has-output"].value is True
 
-    with patch("agent_lemon_lime.report.llm.call_llm") as mock_call:
-        mock_call.return_value = "FAIL"
-        result = judge.evaluate(_make_output())
-    assert result is False
+
+def test_judge_with_error_returns_error_score():
+    judges = [
+        JudgeConfig(
+            name="broken",
+            check="raise ValueError('intentional test error')",
+        )
+    ]
+    scores = score_eval_output(_make_output(), judges)
+    assert scores["broken"].error is not None
+    assert "intentional" in scores["broken"].error

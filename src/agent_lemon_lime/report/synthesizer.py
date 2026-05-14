@@ -29,6 +29,7 @@ class ReportSynthesizer:
         inference: InferenceConfig | None = None,
     ) -> EvalReport:
         passed = sum(1 for r in results if r.passed)
+        judge_summary = self._aggregate_scores(results)
         return EvalReport(
             agent_name=agent_name,
             generated_at=datetime.now(UTC).isoformat(),
@@ -41,7 +42,33 @@ class ReportSynthesizer:
             scp=scp,
             violations=violations or [],
             inference=inference or InferenceConfig(),
+            judge_summary=judge_summary,
         )
+
+    def _aggregate_scores(self, results: list[EvalResult]) -> dict[str, dict]:
+        """Aggregate per-judge scores across all results."""
+        from collections import defaultdict
+
+        buckets: dict[str, list] = defaultdict(list)
+        for r in results:
+            for name, score in r.scores.items():
+                if score.value is not None:
+                    buckets[name].append(score.value)
+
+        summary: dict[str, dict] = {}
+        for name, values in buckets.items():
+            entry: dict = {"count": len(values)}
+            if all(isinstance(v, bool) for v in values):
+                entry["pass_rate"] = sum(values) / len(values)
+                entry["mean"] = entry["pass_rate"]
+            elif all(isinstance(v, (int, float)) for v in values):
+                entry["mean"] = sum(values) / len(values)
+                entry["pass_rate"] = None
+            else:
+                entry["mean"] = None
+                entry["pass_rate"] = None
+            summary[name] = entry
+        return summary
 
     def to_markdown(self, report: EvalReport) -> str:
         s = report.summary
@@ -68,6 +95,22 @@ class ReportSynthesizer:
             f"| Pass Rate | {s.pass_rate:.1%} |",
             "",
         ]
+        if report.judge_summary:
+            lines += ["## Judge Scores", ""]
+            lines += ["| Judge | Count | Mean | Pass Rate |"]
+            lines += ["|-------|-------|------|-----------|"]
+            for name, stats in report.judge_summary.items():
+                mean = f"{stats['mean']:.2f}" if stats.get("mean") is not None else "-"
+                rate = f"{stats['pass_rate']:.1%}" if stats.get("pass_rate") is not None else "-"
+                lines.append(f"| {name} | {stats['count']} | {mean} | {rate} |")
+            lines.append("")
+
+        if report.regressions:
+            lines += ["## Regressions", ""]
+            for reg in report.regressions:
+                lines.append(f"- {reg}")
+            lines.append("")
+
         if report.violations:
             lines += ["## SCP Violations", ""]
             for v in report.violations:
