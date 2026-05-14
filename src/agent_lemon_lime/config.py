@@ -18,6 +18,7 @@ def resolve_env(env: dict[str, str]) -> dict[str, str]:
         for k, v in env.items()
     }
 
+
 CONFIG_FILENAME = "agent-lemon.yaml"
 
 
@@ -46,6 +47,8 @@ class EvalsConfig(BaseModel):
     directories: list[str] = Field(default_factory=list)
     skills: list[SkillSource] = Field(default_factory=list)
     backends: list[BackendConfig] = Field(default_factory=list)
+    judges: list[dict[str, object]] = Field(default_factory=list)
+    thresholds: dict[str, dict[str, float]] = Field(default_factory=dict)
 
 
 class SCPConfig(BaseModel):

@@ -79,7 +79,12 @@ class LemonAgent:
         Returns:
             LemonRunResult with mode=DISCOVERY, observed SCP, report, and no violations.
         """
-        results = self._runner.run(eval_cases, sandbox=self.sandbox, on_result=on_result)
+        results = self._runner.run(
+            eval_cases,
+            sandbox=self.sandbox,
+            judge_model=self.config.report.model,
+            on_result=on_result,
+        )
         if backend_results:
             results.extend(backend_results)
         observed_scp = self._build_observed_scp()
@@ -117,12 +122,15 @@ class LemonAgent:
         Returns:
             LemonRunResult with mode=ASSERT, observed SCP, report, and any violations.
         """
-        results = self._runner.run(eval_cases, sandbox=self.sandbox, on_result=on_result)
+        results = self._runner.run(
+            eval_cases,
+            sandbox=self.sandbox,
+            judge_model=self.config.report.model,
+            on_result=on_result,
+        )
         if backend_results:
             results.extend(backend_results)
-        observed = (
-            _observed_scp if _observed_scp is not None else self._build_observed_scp()
-        )
+        observed = _observed_scp if _observed_scp is not None else self._build_observed_scp()
         violations = observed.assert_subset_of(assert_scp)
         report = self._synthesizer.build(
             results,

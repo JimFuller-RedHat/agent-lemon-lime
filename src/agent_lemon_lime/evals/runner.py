@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from agent_eval.config import JudgeConfig
 from pydantic import BaseModel
 
-from agent_lemon_lime.evals.standard import EvalDomain, EvalOutput, Evaluator
+from agent_lemon_lime.evals.scoring import JudgeScore, score_eval_output
+from agent_lemon_lime.evals.standard import EvalDomain, EvalOutput
 from agent_lemon_lime.harness.base import AbstractSandbox
+
+logger = logging.getLogger(__name__)
 
 
 class EvalInput(BaseModel):
@@ -22,10 +27,9 @@ class EvalInput(BaseModel):
 class EvalCase:
     name: str
     input: EvalInput
-    evaluators: list[Evaluator]
+    judges: list[JudgeConfig]
     domain: EvalDomain = EvalDomain.CORRECTNESS
     description: str = ""
-    judge_hint: str = ""
 
 
 @dataclass
@@ -36,6 +40,7 @@ class EvalResult:
     output: EvalOutput
     failures: list[str] = field(default_factory=list)
     command: list[str] = field(default_factory=list)
+    scores: dict[str, JudgeScore] = field(default_factory=dict)
 
 
 class EvalRunner:
@@ -46,6 +51,7 @@ class EvalRunner:
         cases: list[EvalCase],
         *,
         sandbox: AbstractSandbox,
+        judge_model: str | None = None,
         on_result: Callable[[EvalResult], None] | None = None,
     ) -> list[EvalResult]:
         results: list[EvalResult] = []
@@ -63,7 +69,16 @@ class EvalRunner:
                     stderr=raw.stderr,
                     domain=case.domain,
                 )
-                failures = [type(ev).__name__ for ev in case.evaluators if not ev.evaluate(output)]
+                scores = score_eval_output(
+                    output,
+                    case.judges,
+                    model=judge_model,
+                )
+                failures = [
+                    f"{name}: {s.rationale or s.error or ''}"
+                    for name, s in scores.items()
+                    if s.value is False or s.value == 0 or s.error
+                ]
                 result = EvalResult(
                     name=case.name,
                     passed=len(failures) == 0,
@@ -71,6 +86,7 @@ class EvalRunner:
                     output=output,
                     failures=failures,
                     command=list(case.input.command),
+                    scores=scores,
                 )
                 results.append(result)
                 if on_result is not None:

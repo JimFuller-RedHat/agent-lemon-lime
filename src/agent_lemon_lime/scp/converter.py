@@ -104,10 +104,7 @@ def to_sandbox_policy(scp: SystemCapabilityProfile) -> Any:
             )
             for ep in np.endpoints
         ]
-        binaries = [
-            sandbox_pb2.NetworkBinary(path=b.path)
-            for b in np.binaries
-        ]
+        binaries = [sandbox_pb2.NetworkBinary(path=b.path) for b in np.binaries]
         policy.network_policies[key].CopyFrom(
             sandbox_pb2.NetworkPolicyRule(
                 name=np.name,

@@ -50,6 +50,7 @@ def tmp_policy_yaml(tmp_path: Path) -> Path:
 # Schema-alignment tests — one Rust struct per test
 # ---------------------------------------------------------------------------
 
+
 def test_openshell_schema_policy_file_top_level_fields(tmp_path: Path) -> None:
     """PolicyFile: version, filesystem_policy, landlock, process, network_policies."""
     yaml_text = textwrap.dedent("""\
@@ -115,7 +116,9 @@ def test_openshell_schema_landlock_def(tmp_path: Path) -> None:
 def test_openshell_schema_process_def(tmp_path: Path) -> None:
     """ProcessDef: run_as_user, run_as_group."""
     p = tmp_path / "policy.yaml"
-    p.write_text("version: 1\nprocess:\n  run_as_user: myuser\n  run_as_group: mygroup\nnetwork_policies: {}\n")
+    p.write_text(
+        "version: 1\nprocess:\n  run_as_user: myuser\n  run_as_group: mygroup\nnetwork_policies: {}\n"
+    )
     scp = SystemCapabilityProfile.from_yaml(p)
     assert scp.process.run_as_user == "myuser"
     assert scp.process.run_as_group == "mygroup"
@@ -425,6 +428,7 @@ def test_openshell_schema_full_policy_roundtrip(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Pre-existing behavioural tests (unchanged)
 # ---------------------------------------------------------------------------
+
 
 def test_scp_roundtrip_yaml(tmp_path: Path) -> None:
     import yaml

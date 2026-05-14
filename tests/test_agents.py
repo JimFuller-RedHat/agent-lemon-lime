@@ -1,14 +1,26 @@
 """Tests for Agent Lemon and Agent Lime."""
 
+from agent_eval.config import JudgeConfig
+
 from agent_lemon_lime.agents.lemon import LemonAgent, LemonRunResult
 from agent_lemon_lime.agents.lime import LimeAgent, LimeEvent, LimeEventType
 from agent_lemon_lime.config import LemonConfig, RunMode
 from agent_lemon_lime.evals.runner import EvalCase, EvalInput
-from agent_lemon_lime.evals.standard import EvalDomain, ExitCodeEvaluator, OutputContainsEvaluator
+from agent_lemon_lime.evals.standard import EvalDomain
 from agent_lemon_lime.harness.mock import MockSandbox
 from agent_lemon_lime.scp.models import SystemCapabilityProfile
 
 MINIMAL_CONFIG = "name: test-agent\nrun:\n  command: echo hello\n"
+
+EXIT_CHECK = JudgeConfig(
+    name="exit-code",
+    check='return outputs.get("exit_code", 1) == 0, "non-zero exit"',
+)
+
+CONTAINS_HELLO = JudgeConfig(
+    name="output-contains",
+    check='return "hello" in outputs.get("stdout", ""), "missing hello"',
+)
 
 
 def test_lemon_agent_creates():
@@ -38,7 +50,7 @@ def test_lemon_discovery_with_cases():
         EvalCase(
             name="echo-test",
             input=EvalInput(command=["echo", "hello"]),
-            evaluators=[ExitCodeEvaluator(), OutputContainsEvaluator(expected="hello")],
+            judges=[EXIT_CHECK, CONTAINS_HELLO],
             domain=EvalDomain.CORRECTNESS,
         )
     ]
@@ -62,10 +74,8 @@ def test_lemon_assert_detects_violation():
     config = LemonConfig.from_yaml(MINIMAL_CONFIG)
     sandbox = MockSandbox()
 
-    # The observed SCP has a network endpoint not in the allowed SCP
-    allowed_scp = SystemCapabilityProfile()  # no network policies = nothing allowed
+    allowed_scp = SystemCapabilityProfile()
 
-    # We'll inject an observed SCP that has a disallowed endpoint
     observed_scp = SystemCapabilityProfile.model_validate(
         {
             "network_policies": {
@@ -78,7 +88,6 @@ def test_lemon_assert_detects_violation():
     )
 
     agent = LemonAgent(config=config, sandbox=sandbox)
-    # Override observed SCP for testing by injecting it
     result = agent.run_assert(
         eval_cases=[],
         assert_scp=allowed_scp,
@@ -110,14 +119,13 @@ def test_lime_analyse_events_no_violations():
     events = [
         LimeEvent(event_type=LimeEventType.TOOL_CALL, tool_name="file_read"),
     ]
-    # file_read is not a network endpoint — no violations
     anomalies = lime.analyse_events(events)
     assert anomalies == []
 
 
 def test_lime_analyse_events_detects_unknown_network_call():
     """An event that signals an unexpected outbound host is a violation."""
-    scp = SystemCapabilityProfile()  # no network policies = nothing allowed
+    scp = SystemCapabilityProfile()
     lime = LimeAgent(otel_endpoint="http://localhost:4317", assert_scp=scp)
     events = [
         LimeEvent(
@@ -131,7 +139,7 @@ def test_lime_analyse_events_detects_unknown_network_call():
 
 
 def test_lime_collect_events_returns_list():
-    """collect_events_from_otel returns a list (empty if collector unreachable)."""
+    """collect_events_from_otel returns a list (empty if unreachable)."""
     scp = SystemCapabilityProfile()
     lime = LimeAgent(otel_endpoint="http://localhost:4317", assert_scp=scp)
     events = lime.collect_events_from_otel()

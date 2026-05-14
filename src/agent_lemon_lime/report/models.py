@@ -35,3 +35,5 @@ class EvalReport:
     scp: SystemCapabilityProfile
     violations: list[str] = field(default_factory=list)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
+    judge_summary: dict[str, dict] = field(default_factory=dict)
+    regressions: list[str] = field(default_factory=list)
